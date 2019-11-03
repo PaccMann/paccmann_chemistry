@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/PaccMann/paccmann_chemistry.svg?branch=master)](https://travis-ci.org/PaccMann/paccmann_chemistry)
 # paccmann_chemistry
 
 Generative models of chemical data for PaccMann^RL.
