@@ -63,7 +63,6 @@ optional arguments:
 If you use `paccmann_chemistry` in your projects, please cite the following:
 
 ```bib
-}
 @misc{born2019reinforcement,
     title={Reinforcement learning-driven de-novo design of anticancer compounds conditioned on biomolecular profiles},
     author={Jannis Born and Matteo Manica and Ali Oskooei and Maria Rodriguez Martinez},
