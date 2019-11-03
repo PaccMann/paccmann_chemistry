@@ -1,4 +1,5 @@
-"""Train TeacherVAE script."""
+#!/usr/bin/env python3
+"""Train TeacherVAE molecule generator."""
 import argparse
 import json
 import logging
