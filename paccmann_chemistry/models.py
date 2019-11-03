@@ -187,7 +187,7 @@ class StackGRUDecoder(StackGRU):
             output, hidden, stack = self.forward(input_token, hidden, stack)
 
             # Sample from the network as a multinomial distribution
-            output_dist = output.data.cpu().view(batch_size, 1).div(
+            output_dist = output.data.cpu().view(batch_size, -1).div(
                 temperature
             ).exp().double()    # yapf: disable
             top_idx = torch.tensor(
