@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from time import time
+# The logger imports tensorflow which needs to be imported before torch.
 from paccmann_chemistry.logger import Logger
 from paccmann_chemistry.utils import collate_fn, get_device
 from paccmann_chemistry.models import (
