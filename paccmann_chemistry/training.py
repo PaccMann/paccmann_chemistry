@@ -97,9 +97,9 @@ def train_vae(
         save_interval (int): The interval at which the model is saved.
         loss_tracker (dict): At each log_interval, update improved test
             losses and respective epoch.
-        train_logger (TBLogger): Tensorboard logger objects to
+        train_logger (Logger): Tensorboard logger objects to
         log scalars to tfevent file.
-        val_logger (TBLogger): Tensorboard logger objects to
+        val_logger (Logger): Tensorboard logger objects to
         log scalars to tfevent file.
         logger (logging.Logger): To print commands on the fly.
 

@@ -2,7 +2,6 @@
 import logging
 from time import perf_counter
 from functools import wraps
-import tensorflow as tf
 import math
 import torch
 import torch.nn as nn
@@ -116,50 +115,6 @@ def track_loss(fn):
         return lst
 
     return inner
-
-
-class TBLogger:
-    """Tensorboard Logger."""
-
-    def __init__(self, logdir):
-        """
-        Tensorboard Logger.
-
-        Args:
-            logdir (str): directory of the event file to be written.
-        """
-        self.writer = tf.compat.v1.summary.FileWriter(logdir)
-
-    def close(self):
-        self.writer.close()
-
-    def scalar_summary(self, tag, value, step):
-        """Log a scalar variable."""
-        summary = tf.compat.v1.Summary(
-            value=[tf.compat.v1.Summary.Value(tag=tag, simple_value=value)]
-        )
-        self.writer.add_summary(summary, step)
-
-    def log_scalar(self, scalar_tag, value, global_step):
-        """
-        Logs Scalar to Event File.
-
-        Args:
-            scalar_tag (str): the name of the scalar to be logged.
-            value (torch.Tensor or np.array): the values to be logged.
-            global_step (int): the logging step.
-
-        Example:
-            tensorboard = TBLogger(log_dir)
-            x = np.arange(1,101)
-            y = 20 + 3 * x + np.random.random(100) * 100
-            for i in range(0,100):
-                tensorboard.log_scalar('myvalue', y[i], i)
-        """
-        summary = tf.Summary()
-        summary.value.add(tag=scalar_tag, simple_value=value)
-        self.writer.add_summary(summary, global_step=global_step)
-        self.writer.flush()
 
 
 def kl_weight(step, growth_rate=0.004):

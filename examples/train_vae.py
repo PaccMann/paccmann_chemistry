@@ -6,7 +6,8 @@ import logging
 import os
 import sys
 from time import time
-from paccmann_chemistry.utils import TBLogger, collate_fn, get_device
+from paccmann_chemistry.logger import Logger
+from paccmann_chemistry.utils import collate_fn, get_device
 from paccmann_chemistry.models import (
     StackGRUDecoder, StackGRUEncoder, TeacherVAE
 )
@@ -72,8 +73,8 @@ def main(parser_namespace):
         os.makedirs(log_path, exist_ok=True)
         os.makedirs(val_dir, exist_ok=True)
 
-        train_logger = TBLogger(log_path)
-        val_logger = TBLogger(val_dir)
+        train_logger = Logger(log_path)
+        val_logger = Logger(val_dir)
 
         # Load SMILES language
         smiles_language = SMILESLanguage.load(smiles_language_filepath)
