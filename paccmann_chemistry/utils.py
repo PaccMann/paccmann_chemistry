@@ -20,9 +20,9 @@ def sequential_data_preparation(
         input_batch (torch.Tensor): Batch of padded sequences, output of
             nn.utils.rnn.pad_sequence(batch) of size
             `[sequence length, batch_size, 1]`.
-        input_keep (float): The keep probability of input sequence tokens
-            will keep or drop input tokens according to a Bernoulli
-            distribution with p = input_keep. Defaults to 1.
+        input_keep (float): The probability not to drop input sequence tokens
+            according to a Bernoulli distribution with p = input_keep.
+            Defaults to 1.
         start_index (int): The index of the sequence start token.
         end_index (int): The index of the sequence end token.
         dropout_index (int): The index of the dropout token. Defaults to 1.
