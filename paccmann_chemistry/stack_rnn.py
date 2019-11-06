@@ -1,60 +1,58 @@
 """Stack Augmented GRU Implementation."""
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
+from torch.autograd import Variable
+
 from .hyperparams import OPTIMIZER_FACTORY
 from .utils import get_device
 
 
 class StackGRU(nn.Module):
-    """Stack Augmented GRU class."""
+    """Stack Augmented Gated Recurrent Unit (GRU) class."""
 
     def __init__(self, params):
         """
         Initialization.
 
-        Args:
-            params (dict): with hyperparameters.
-                This should contain:
-                - input_size (int): vocabulary size
-                - hidden_size (int): hidden size of GRU
-                - output_size (int): output size of GRU (vocab size)
-                - stack_width (int): number of stacks in parallel
-                - stack_depth (int): stack depth
-                - n_layers (int): number of GRU layer
-                - optimizer (str): choose from: 'Adadelta', 'Adagrad','Adam', 'Adamax',
-                    'RMSprop', 'SGD', defaults to 'Adadelta'.
-                - lr (float): learning rate default 0.01
-                - padding_index (int): index of the padding token
-                - bidirectional (bool): bidirectional GRU, defaults to False
-                - batch_size (int): batch size, defaults to 32
-                - dropout (float): dropout on the output of GRU layers except the last layer.
+        Reference:
+            GRU layers intended to help with the training of VAEs by weakening
+            the decoder as proposed in: https://arxiv.org/abs/1511.06349.
 
-        GRU layers intended to help with the training of VAEs by weakening the decoder as
-            proposed in: https://arxiv.org/abs/1511.06349
+        Args:
+            params (dict): Hyperparameters.
+
+        Items in params:
+            input_size (int): Vocabulary size.
+            hidden_size (int): Hidden size of GRU.
+            output_size (int): Output size of GRU (vocab size).
+            stack_width (int): Number of stacks in parallel.
+            stack_depth (int): Stack depth.
+            n_layers (int): The number of GRU layer.
+            dropout (float): Dropout on the output of GRU layers except the
+                last layer.
+            batch_size (int): Batch size.
+            lr (float, optional): Learning rate default 0.01.
+            optimizer (str, optional): Choice from OPTIMIZER_FACTORY.
+                Defaults to 'Adadelta'.
+            padding_index (int, optional): Index of the padding token.
+                Defaults to 0.
+            bidirectional (bool, optional): Whether to train a bidirectional
+                GRU. Defaults to False.
         """
 
         super(StackGRU, self).__init__()
 
-        self.params = params
-        self.bidirectional = params['bidirectional']
-        self.n_directions = 2 if self.bidirectional else 1
         self.input_size = params['input_size']
         self.hidden_size = params['hidden_size']
-        self.output_size = params['input_size']
+        self.output_size = params['output_size']
         self.stack_width = params['stack_width']
         self.stack_depth = params['stack_depth']
         self.batch_size = params['batch_size']
-        self.dropout = params['dropout']
-        self.lr = params.get('lr', 0.01)
-        self.has_cell = params.get('has_cell', False)
-        self.has_stack = params.get('has_stack', True)
         self.use_cuda = torch.cuda.is_available()
         self.n_layers = params['n_layers']
-        self.padding_index = params.get('pad_index', 0)
-        self.optimizer = params.get('optimizer', 'Adadelta')
-        self.activation = params.get('activation', 'relu')
+        self.bidirectional = params.get('bidirectional', False)
+        self.n_directions = 2 if self.bidirectional else 1
         self.device = get_device()
 
         # Network
@@ -66,31 +64,23 @@ class StackGRU(nn.Module):
         )
 
         self.encoder = nn.Embedding(
-            self.input_size, self.hidden_size, padding_idx=self.padding_index
+            self.input_size, self.hidden_size,
+            padding_idx=params.get('pad_index', 0)
         )
         self.gru = nn.GRU(
             self.hidden_size + self.stack_width,
             self.hidden_size,
             self.n_layers,
             bidirectional=self.bidirectional,
-            dropout=self.dropout
+            dropout=params['dropout']
         )
         self.decoder = nn.Linear(
             self.hidden_size * self.n_directions, self.output_size
         )
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = OPTIMIZER_FACTORY[
-            self.optimizer
-        ](self.parameters(), lr=self.lr)    # yapf: disable
-
-    def load_model(self, path):
-        """Load Model From Path."""
-        weights = torch.load(path)
-        self.load_state_dict(weights)
-
-    def save_model(self, path):
-        """Save Model to Path."""
-        torch.save(self.state_dict(), path)
+            params.get('optimizer', 'Adadelta')
+        ](self.parameters(), lr=params.get('lr', 0.01))  # yapf: disable
 
     def forward(self, input_token, hidden, stack):
         """
@@ -98,19 +88,18 @@ class StackGRU(nn.Module):
 
         Args:
             input_token (torch.Tensor): LongTensor containing
-                indices of the input token of size [1, batch_size]
-            hidden (torch.Tensor): hidden state of size
-                [n_layers*n_directions, batch_size, hidden_size]
-            stack (torch.Tensor): previous step's stack of size
-                [batch_size, stack_depth, stack_width]
+                indices of the input token of size `[1, batch_size]`.
+            hidden (torch.Tensor): Hidden state of size
+                `[n_layers*n_directions, batch_size, hidden_size]`.
+            stack (torch.Tensor): Previous step's stack of size
+                `[batch_size, stack_depth, stack_width]`.
 
         Returns:
-            output (torch.Tensor): output of size
-                [batch_size, output_size]
-            hidden (torch.Tensor): hidden state of size
-                [1, batch_size, hidden_size]
-            stack (torch.Tensor): stack of size
-                [batch_size, stack_depth, stack_width]
+            (torch.Tensor, torch.Tensor, torch.Tensor): output, hidden, stack.
+
+            Output of size `[batch_size, output_size]`.
+            Hidden state of size `[1, batch_size, hidden_size]`.
+            Stack of size `[batch_size, stack_depth, stack_width]`.
         """
         if input_token.shape[0] != 1:
             input_token = input_token.view(1, -1)
@@ -135,19 +124,19 @@ class StackGRU(nn.Module):
         Stack update function.
 
         Args:
-            input_val (torch.Tensor): contributon of the current
+            input_val (torch.Tensor): Contributon of the current
                 hidden state to be input to the stack.
-                Must be of shape: [batch_size, 1, stack_width].
-            prev_stack (torch.Tensor): the stack from previous
-                step. Must be of shape:
-                [batch_size, stack_depth, stack_width].
-            controls (torch.Tensor): stack controls giving
+                Must be of shape `[batch_size, 1, stack_width]`.
+            prev_stack (torch.Tensor): The stack from previous
+                step. Must be of shape
+                `[batch_size, stack_depth, stack_width]`.
+            controls (torch.Tensor): Stack controls giving
                 probabilities of PUSH, POP or NO-OP for the pushdown
-                stack. Must be of shape: [batch_size, 3].
+                stack. Must be of shape `[batch_size, 3]`.
 
         Returns:
-            new_stack (torch.Tensor): updated stack of shape:
-                [batch_size, stack_depth, stack_width].
+            torch.Tensor: Updated stack of shape
+                `[batch_size, stack_depth, stack_width]`.
         """
         batch_size = prev_stack.size(0)
         controls = controls.view(-1, 3, 1, 1)
@@ -170,6 +159,7 @@ class StackGRU(nn.Module):
         """Initializes hidden state."""
         if batch_size is None:
             batch_size = self.batch_size
+
         if self.use_cuda:
             return Variable(
                 torch.zeros(
@@ -177,13 +167,13 @@ class StackGRU(nn.Module):
                     self.hidden_size
                 ).cuda()
             )
-        else:
-            return Variable(
-                torch.zeros(
-                    self.n_layers * self.n_directions, batch_size,
-                    self.hidden_size
-                )
+
+        return Variable(
+            torch.zeros(
+                self.n_layers * self.n_directions, batch_size,
+                self.hidden_size
             )
+        )
 
     def init_stack(self, batch_size=None):
         """Initializes Stack."""
@@ -192,34 +182,36 @@ class StackGRU(nn.Module):
         result = torch.zeros(batch_size, self.stack_depth, self.stack_width)
         if self.use_cuda:
             return Variable(result.cuda())
-        else:
-            return Variable(result)
+
+        return Variable(result)
 
     def train_step(self, input_seq, target_seq):
         """
         The train step method.
 
         Args:
-            input_seq (torch.Tensor): padded tensor of indices for a batch of input 
-                sequences. Must be of shape: [max batch sequence length +1, batch_size].
-            target_seq (torch.Tensor): padded tensor of indices for a batch of 
-                target sequences. Must be of shape: 
-                [max batch sequence length +1, batch_size].
+            input_seq (torch.Tensor): Padded tensor of indices for a batch of
+                input sequences. Must be of shape
+                `[max batch sequence length +1, batch_size]`.
+            target_seq (torch.Tensor): Padded tensor of indices for a batch of
+                target sequences. Must be of shape
+                `[max batch sequence length +1, batch_size]`.
 
-            Note: input and target sequences are outputs of seq_data_prep(batch) 
-                with batches returned by a DataLoader object.
+        Note: Input and target sequences are outputs of
+            sequential_data_preparation(batch) with batches returned by a
+            DataLoader object.
 
         Returns:
-            Average loss for all sequence steps.
+            float: Average loss for all sequence steps.
         """
         hidden = self.init_hidden()
         stack = self.init_stack()
         self.zero_grad()
         loss = 0
-        for idx in range(len(input_seq)):
-            output, hidden, stack = self(input_seq[idx], hidden, stack)
+        for input_entry, target_entry in zip(input_seq, target_seq):
+            output, hidden, stack = self(input_entry, hidden, stack)
             loss += self.criterion(
-                output, torch.LongTensor(target_seq[idx].squeeze().numpy())
+                output, torch.LongTensor(target_entry.squeeze().numpy())
             )
         loss.backward()
         self.optimizer.step()
@@ -233,20 +225,13 @@ class StackGRU(nn.Module):
         The evaluation method.
 
         Args:
-            prime_input (torch.tensor): tensor of indices
-                for the priming string of size
-                [batch_size, length of priming sequences].
-
-            Example:
-                prime_input = [[2, 4, 5], [2, 4, 7]]
-                prime_input = torch.tensor(prime_input)
-
-            end_token (torch.tensor): end token for the
-                generated molecule.
-            generate_len (int): length of the generated molecule
-            temperature (float): softmax temperature parameter
-                between 0 and 1. Lower temperatures result in a
-                more descriminative softmax.
+            prime_input (torch.tensor): Indices for the priming string of size
+                `[batch_size, length of priming sequences]`.
+                Example: `prime_input = torch.tensor([[2, 4, 5], [2, 4, 7]])`
+            end_token (torch.tensor): End token for the generated molecule.
+            generate_len (int): Length of the generated molecule.
+            temperature (float): Softmax temperature parameter between 0 and 1.
+                Lower temperatures result in a more descriminative softmax.
 
         Returns:
             The sequence of indices for the generated molecule.
@@ -257,12 +242,12 @@ class StackGRU(nn.Module):
         stack = self.init_stack(batch_size)
         generated_seq = prime_input.transpose(0, 2)
         # Use priming string to "build up" hidden state
-        for p in range(len(prime_input) - 1):
-            _, hidden, stack = self.forward(prime_input[p], hidden, stack)
+        for prime_entry in prime_input[:-1]:
+            _, hidden, stack = self(prime_entry, hidden, stack)
         input_token = prime_input[-1]
 
-        for p in range(generate_len):
-            output, hidden, stack = self.forward(input_token, hidden, stack)
+        for _ in range(generate_len):
+            output, hidden, stack = self(input_token, hidden, stack)
 
             # Sample from the network as a multinomial distribution
             output_dist = output.data.cpu().view(batch_size,

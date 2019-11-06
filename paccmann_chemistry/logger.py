@@ -9,11 +9,10 @@ class Logger:
     """Tensorboard Logger."""
 
     def __init__(self, logdir):
-        """
-        Tensorboard Logger.
+        """Constructor.
 
         Args:
-            logdir (str): directory of the event file to be written.
+            logdir (str): Directory of the event file to be written.
         """
         self.writer = tf.compat.v1.summary.FileWriter(logdir)
 
@@ -29,19 +28,19 @@ class Logger:
 
     def log_scalar(self, scalar_tag, value, global_step):
         """
-        Logs Scalar to Event File.
+        Logs scalar to event file.
 
         Args:
-            scalar_tag (str): the name of the scalar to be logged.
-            value (torch.Tensor or np.array): the values to be logged.
-            global_step (int): the logging step.
+            scalar_tag (str): The name of the scalar to be logged.
+            value (torch.Tensor or np.array): The values to be logged.
+            global_step (int): The logging step.
 
         Example:
-            tensorboard = Logger(log_dir)
+            `tensorboard = Logger(log_dir)
             x = np.arange(1,101)
             y = 20 + 3 * x + np.random.random(100) * 100
             for i in range(0,100):
-                tensorboard.log_scalar('myvalue', y[i], i)
+                tensorboard.log_scalar('myvalue', y[i], i)`
         """
         summary = tf.Summary()
         summary.value.add(tag=scalar_tag, simple_value=value)

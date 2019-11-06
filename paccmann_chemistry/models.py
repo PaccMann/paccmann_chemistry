@@ -1,27 +1,43 @@
 """Model Classes Module."""
+from itertools import takewhile
+
 import torch
 import torch.nn as nn
+
 from .stack_rnn import StackGRU
 from .utils import get_device
-from .hyperparams import ACTIVATION_FACTORY
-from itertools import takewhile
 
 
 class StackGRUEncoder(StackGRU):
     """Stacked GRU Encoder."""
 
-    def __init__(self, params, *args, **kwargs):
+    def __init__(self, params):
         """
-        Initializer.
+        Constructor.
 
         Args:
-        params (dict): it contains size of the latent mean (mu) and variance
-            (logvar)
-        *args, **kwargs: additional positional and keyword arguments
-            inherited from StackGRU.
+            params (dict): Hyperparameters.
+
+        Items in params:
+            latent_dim (int): Size of latent mean and variance.
+            input_size (int): Vocabulary size.
+            hidden_size (int): Hidden size of GRU.
+            output_size (int): Output size of GRU (vocab size).
+            stack_width (int): Number of stacks in parallel.
+            stack_depth (int): Stack depth.
+            n_layers (int): The number of GRU layer.
+            dropout (float): Dropout on the output of GRU layers except the
+                last layer.
+            batch_size (int): Batch size.
+            lr (float, optional): Learning rate default 0.01.
+            optimizer (str, optional): Choice from OPTIMIZER_FACTORY.
+                Defaults to 'Adadelta'.
+            padding_index (int, optional): Index of the padding token.
+                Defaults to 0.
+            bidirectional (bool, optional): Whether to train a bidirectional
+                GRU. Defaults to False.
         """
-        super(StackGRUEncoder, self).__init__(params, *args, **kwargs)
-        self.params = params
+        super(StackGRUEncoder, self).__init__(params)
         self.latent_dim = params['latent_dim']
         self.hidden_to_mu = nn.Linear(
             in_features=self.hidden_size * self.n_directions,
@@ -31,7 +47,6 @@ class StackGRUEncoder(StackGRU):
             in_features=self.hidden_size * self.n_directions,
             out_features=self.latent_dim
         )
-        self.activation = ACTIVATION_FACTORY[self.activation]
 
     def encoder_train_step(self, input_seq):
         """
@@ -39,22 +54,23 @@ class StackGRUEncoder(StackGRU):
 
         Args:
             input_seq (torch.Tensor): the sequence of indices for the input
-            of shape [max batch sequence length +1, batch_size]. +1 is for
-            the added start_index
+            of shape `[max batch sequence length +1, batch_size]`, where +1 is
+            for the added start_index.
 
-        Note: input_seq is an output of seq_data_prep(batch) with batches
-            returned by a DataLoader object
+        Note: Input_seq is an output of sequential_data_preparation(batch) with
+            batches returned by a DataLoader object.
 
         Returns:
-            mu (torch.Tensor): the latent mean of shape
-                [1, batch_size, latent_dim]
-            logvar (torch.Tensor): log of the latent variance of shape
-                [1, batch_size, latent_dim]
+            (torch.Tensor, torch.Tensor): mu, logvar
+
+            mu is the latent mean of shape `[1, batch_size, latent_dim]`.
+            logvaris the log of the latent variance of shape
+                `[1, batch_size, latent_dim]`.
         """
         hidden = self.init_hidden()
         stack = self.init_stack()
-        for c in range(len(input_seq)):
-            output, hidden, stack = self(input_seq[c], hidden, stack)
+        for input_entry in input_seq:
+            output, hidden, stack = self(input_entry, hidden, stack)
 
         # Reshape to disentangle layers and directions
         hidden = hidden.view(
@@ -75,13 +91,29 @@ class StackGRUDecoder(StackGRU):
 
     def __init__(self, params, *args, **kwargs):
         """
-        Initializer.
+        Constructor.
 
         Args:
-            params (dict): it contains size of the latent mean (mu) and variance
-                (logvar)
-            *args, **kwargs: additional positional and keyword arguments
-                inherited from StackGRU.
+            params (dict): Hyperparameters.
+
+        Items in params:
+            latent_dim (int): Size of latent mean and variance.
+            input_size (int): Vocabulary size.
+            hidden_size (int): Hidden size of GRU.
+            output_size (int): Output size of GRU (vocab size).
+            stack_width (int): Number of stacks in parallel.
+            stack_depth (int): Stack depth.
+            n_layers (int): The number of GRU layer.
+            dropout (float): Dropout on the output of GRU layers except the
+                last layer.
+            batch_size (int): Batch size.
+            lr (float, optional): Learning rate default 0.01.
+            optimizer (str, optional): Choice from OPTIMIZER_FACTORY.
+                Defaults to 'Adadelta'.
+            padding_index (int, optional): Index of the padding token.
+                Defaults to 0.
+            bidirectional (bool, optional): Whether to train a bidirectional
+                GRU. Defaults to False.
         """
         super(StackGRUDecoder, self).__init__(params, *args, **kwargs)
         self.params = params
@@ -89,35 +121,35 @@ class StackGRUDecoder(StackGRU):
         self.latent_to_hidden = nn.Linear(
             in_features=self.latent_dim, out_features=self.hidden_size
         )
-        self.activation = ACTIVATION_FACTORY[self.activation]
 
     def decoder_train_step(self, latent_z, input_seq, target_seq):
         """
         The Decoder Train Step.
 
         Args:
-            latent_z (torch.Tensor): the sampled latent representation
+            latent_z (torch.Tensor): The sampled latent representation
                 of the SMILES to be used for generation of shape
-                [1, batch_size, latent_dim]
-            input_seq (torch.Tensor): the sequence of indices for the
-                input of size [max batch sequence length +1, batch_size]. +1
-                is for the added start_index
-            target_seq (torch.Tensor): the sequence of indices for the
-                target of shape [max batch sequence length +1, batch_size]. +1
-                is for the added end_index
+                `[1, batch_size, latent_dim]`.
+            input_seq (torch.Tensor): The sequence of indices for the
+                input of size `[max batch sequence length +1, batch_size]`,
+                where +1 is for the added start_index.
+            target_seq (torch.Tensor): The sequence of indices for the
+                target of shape `[max batch sequence length +1, batch_size]`,
+                where +1 is for the added end_index.
 
-        Note: input_seq and target_seq are outputs of
-            generator.data.seq_data_prep(batch) with batches
-            returned by a DataLoader object
+        Note: Input and target sequences are outputs of
+            sequential_data_preparation(batch) with batches returned by a
+            DataLoader object.
 
-        Returns: the cross-entropy training loss for the decoder.
+        Returns:
+            The cross-entropy training loss for the decoder.
         """
         hidden = self.latent_to_hidden(latent_z)
         stack = self.init_stack()
         loss = 0
-        for idx in range(len(input_seq)):
-            output, hidden, stack = self(input_seq[idx], hidden, stack)
-            loss += self.criterion(output, target_seq[idx].squeeze())
+        for input_entry, target_entry in zip(input_seq, target_seq):
+            output, hidden, stack = self(input_entry, hidden, stack)
+            loss += self.criterion(output, target_entry.squeeze())
         return loss
 
     def generate_from_latent(
@@ -132,41 +164,29 @@ class StackGRUDecoder(StackGRU):
         Generate SMILES From Latent Z.
 
         Args:
-            latent_z (torch.Tensor): the sampled latent representation
-                of size [1, batch_size, latent_dim]
-            prime_input (torch.Tensor): tensor of indices for the priming
-                string. Must be of size: [1, prime_input length] or
-                [prime_input length]
-
-            Example:
-
-                prime_input = [2, 4, 5]
-                prime_input = torch.tensor(prime_input).view(1, -1)
-
-                or
-
-                prime_input = [2, 4, 5]
-                prime_input = torch.tensor(prime_input)
-
+            latent_z (torch.Tensor): The sampled latent representation
+                of size `[1, batch_size, latent_dim]`.
+            prime_input (torch.Tensor): Tensor of indices for the priming
+                string. Must be of size [1, prime_input length] or
+                [prime_input length].
+                Example:
+                    `prime_input = torch.tensor([2, 4, 5]).view(1, -1)`
+                    or
+                    `prime_input = torch.tensor([2, 4, 5])`
             end_token (torch.Tensor): End token for the generated molecule
                 of shape [1].
-
-            Example:
-
-                end_token = torch.LongTensor([3])
-
-            generate_len (int): Length of the generated molecule
-            temperature (float): softmax temperature parameter between
+                Example: `end_token = torch.LongTensor([3])`
+            generate_len (int): Length of the generated molecule.
+            temperature (float): Softmax temperature parameter between
                 0 and 1. Lower temperatures result in a more descriminative
                 softmax.
 
         Returns:
-            generated_seq (torch.Tensor): the tensor of sequence(s) for the
-                generated molecule(s) of shape
-                [batch_size, generate_len + len(prime_input)]
+            torch.Tensor: The sequence(s) for the generated molecule(s)
+                of shape [batch_size, generate_len + len(prime_input)].
 
-        Note: for each generated sequence all indices after the first
-            end_token must be discarded
+        Note: For each generated sequence all indices after the first
+            end_token must be discarded.
         """
         n_layers = self.n_layers
         n_directions = self.n_directions
@@ -179,12 +199,12 @@ class StackGRUDecoder(StackGRU):
         generated_seq = prime_input.transpose(0, 2)
 
         # Use priming string to "build up" hidden state
-        for p in range(len(prime_input) - 1):
-            _, hidden, stack = self.forward(prime_input[p], hidden, stack)
+        for prime_entry in prime_input[:-1]:
+            _, hidden, stack = self(prime_entry, hidden, stack)
         input_token = prime_input[-1].to(get_device())
 
-        for p in range(generate_len):
-            output, hidden, stack = self.forward(input_token, hidden, stack)
+        for _ in range(generate_len):
+            output, hidden, stack = self(input_token, hidden, stack)
 
             # Sample from the network as a multinomial distribution
             output_dist = output.data.cpu().view(batch_size, -1).div(
@@ -222,16 +242,17 @@ class TeacherVAE(nn.Module):
     def encode(self, input_seq):
         """
         VAE Encoder.
+
         Args:
             input_seq (torch.Tensor): the sequence of indices for the input
-                of shape [max batch sequence length +1, batch_size]. +1 is for
-                the added start_index
+                of shape `[max batch sequence length +1, batch_size]`, where +1
+                is for the added start_index.
 
         Returns:
             mu (torch.Tensor): the latent mean of shape
-                [1, batch_size, latent_dim]
+                `[1, batch_size, latent_dim]`.
             logvar (torch.Tensor): log of the latent variance of shape
-                [1, batch_size, latent_dim]
+                `[1, batch_size, latent_dim]`.
         """
         mu, logvar = self.encoder.encoder_train_step(input_seq)
         return mu, logvar
@@ -242,13 +263,13 @@ class TeacherVAE(nn.Module):
 
         Args:
             mu (torch.Tensor): the latent mean of shape
-                [1, batch_size, latent_dim]
+                `[1, batch_size, latent_dim]`.
             logvar (torch.Tensor): log of the latent variance of shape
-                [1, batch_size, latent_dim]
+                `[1, batch_size, latent_dim]`.
 
         Returns:
-            Sampled latent z from the latent distribution of shape
-            [1, batch_size, latent_dim]
+            torch.Tensor: Sampled latent z from the latent distribution of
+                shape `[1, batch_size, latent_dim]`.
         """
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
@@ -261,19 +282,20 @@ class TeacherVAE(nn.Module):
         Args:
             latent_z (torch.Tensor): the sampled latent representation
                 of the SMILES to be used for generation of shape
-                [1, batch_size, latent_dim]
+                `[1, batch_size, latent_dim]`
             input_seq (torch.Tensor): the sequence of indices for the input
-                of shape [max batch sequence length +1, batch_size]. +1 is for
-                the added start_index
+                of shape `[max batch sequence length +1, batch_size]`, where +1
+                is for the added start_index.
             target_seq (torch.Tensor): the sequence of indices for the
-                target of shape [max batch sequence length +1, batch_size]. +1
-                is for the added end_index
+                target of shape `[max batch sequence length +1, batch_size]`,
+                where +1 is for the added end_index.
 
-        Note: input_seq and target_seq are outputs of
-            generator.data.seq_data_prep(batch) with batches
-            returned by a DataLoader object
+        Note: Input and target sequences are outputs of
+            sequential_data_preparation(batch) with batches returned by a
+            DataLoader object.
 
-        Returns: the cross-entropy training loss for the decoder.
+        Returns:
+            the cross-entropy training loss for the decoder.
         """
         n_layers = self.decoder.n_layers
         n_directions = self.decoder.n_directions
@@ -289,22 +311,24 @@ class TeacherVAE(nn.Module):
 
         Args:
             input_seq (torch.Tensor): the sequence of indices for the input
-                of shape [max batch sequence length +1, batch_size]. +1 is for
-                the added start_index.
+                of shape `[max batch sequence length +1, batch_size]`, where +1
+                is for the added start_index.
             target_seq (torch.Tensor): the sequence of indices for the
-                target of shape [max batch sequence length +1, batch_size]. +1
-                is for the added end_index.
+                target of shape `[max batch sequence length +1, batch_size]`,
+                where +1 is for the added end_index.
 
-        Note: input_seq and target_seq are outputs of
-            generator.data.seq_data_prep(batch) with batches
-            returned by a DataLoader object.
+        Note: Input and target sequences are outputs of
+            sequential_data_preparation(batch) with batches returned by a
+            DataLoader object.
 
         Returns:
-            decoder_loss: the cross-entropy training loss for the decoder.
-            mu (torch.Tensor): the latent mean of shape
-                [1, batch_size, latent_dim].
-            logvar (torch.Tensor): log of the latent variance of shape
-                [1, batch_size, latent_dim].
+            (torch.Tensor, torch.Tensor, torch.Tensor): decoder_loss, mu,
+                logvar
+
+            decoder_loss is the cross-entropy training loss for the decoder.
+            mu is the latent mean of shape `[1, batch_size, latent_dim]`.
+            logvar is log of the latent variance of shape
+                `[1, batch_size, latent_dim]`.
         """
         mu, logvar = self.encode(input_seq)
         latent_z = self.reparameterize(mu, logvar)
@@ -323,40 +347,29 @@ class TeacherVAE(nn.Module):
         Generate SMILES From Latent Z.
 
         Args:
-            latent_z (torch.Tensor): the sampled latent representation
-                of size [1, batch_size, latent_dim].
-            prime_input (torch.Tensor): tensor of indices for the priming
-                string. Must be of size: [1, prime_input length] or
-                [prime_input length].
-
+            latent_z (torch.Tensor): The sampled latent representation
+                of size `[1, batch_size, latent_dim]`.
+            prime_input (torch.Tensor): Tensor of indices for the priming
+                string. Must be of size `[1, prime_input length]` or
+                `[prime_input length]`.
                 Example:
-
-                    prime_input = [2, 4, 5]
-                    prime_input = torch.tensor(prime_input).view(1, -1)
-
+                    `prime_input = torch.tensor([2, 4, 5]).view(1, -1)`
                     or
-
-                    prime_input = [2, 4, 5]
-                    prime_input = torch.tensor(prime_input)
-
+                    `prime_input = torch.tensor([2, 4, 5])`
             end_token (torch.Tensor): End token for the generated molecule
-                of shape [1].
-
-                Example:
-
-                    end_token = torch.LongTensor([3])
-
-            generate_len (int): Length of the generated molecule
-                temperature (float): softmax temperature parameter between
+                of shape `[1]`.
+                Example: `end_token = torch.LongTensor([3])`
+            generate_len (int): Length of the generated molecule.
+            temperature (float): Softmax temperature parameter between
                 0 and 1. Lower temperatures result in a more descriminative
                 softmax.
 
         Returns:
-            molecule_iter (map): an iterator returning the torch tensor of
+            iterable: An iterator returning the torch tensor of
                 sequence(s) for the generated molecule(s) of shape
-                [sequence length].
+                `[sequence length]`.
 
-        Note: the start and end tokens are automatically stripped
+        Note: The start and end tokens are automatically stripped
             from the returned torch tensors for the generated molecule.
         """
         generated_batch = self.decoder.generate_from_latent(
@@ -378,10 +391,10 @@ class TeacherVAE(nn.Module):
         return molecule_iter
 
     def save_model(self, path, *args, **kwargs):
-        """Save Model to Path."""
+        """Save model to path."""
         torch.save(self.state_dict(), path, *args, **kwargs)
 
     def load_model(self, path, *args, **kwargs):
-        """Load Model From Path."""
+        """Load model from path."""
         weights = torch.load(path, *args, **kwargs)
         self.load_state_dict(weights)
