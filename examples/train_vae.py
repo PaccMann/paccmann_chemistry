@@ -138,9 +138,7 @@ def main(parser_namespace):
         )
         # initialize encoder and decoder
         device = get_device()
-        params.update({'activation': params.get('encoder_activation', 'relu')})
         gru_encoder = StackGRUEncoder(params).to(device)
-        params.update({'activation': params.get('decoder_activation', 'relu')})
         gru_decoder = StackGRUDecoder(params).to(device)
         gru_vae = TeacherVAE(gru_encoder, gru_decoder).to(device)
         loss_tracker = {
