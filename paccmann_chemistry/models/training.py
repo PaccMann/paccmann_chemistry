@@ -7,7 +7,7 @@ import torch
 
 from ..utils.hyperparams import OPTIMIZER_FACTORY
 from ..utils.loss_functions import vae_loss_function
-from ..utils.utils import get_device, sequential_data_preparation
+from ..utils import get_device, sequential_data_preparation
 
 
 def test_vae(model, dataloader, logger, input_keep):

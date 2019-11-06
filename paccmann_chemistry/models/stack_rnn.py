@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from ..utils.hyperparams import OPTIMIZER_FACTORY
-from ..utils.utils import get_device
+from ..utils import get_device
 
 
 class StackGRU(nn.Module):
