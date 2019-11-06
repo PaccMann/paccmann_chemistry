@@ -1,11 +1,13 @@
 """Train and Test Functions and Utilities."""
-import os
-import torch
 import json
+import os
 from time import time
-from .utils import seq_data_prep, get_device
-from .loss_functions import vae_loss_function
+
+import torch
+
 from .hyperparams import OPTIMIZER_FACTORY
+from .loss_functions import vae_loss_function
+from .utils import get_device, sequential_data_preparation
 
 
 def test_vae(model, dataloader, logger, test_input_keep):
@@ -31,7 +33,7 @@ def test_vae(model, dataloader, logger, test_input_keep):
                 )
             padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
             padded_batch = padded_batch.to(device)
-            encoder_seq, decoder_seq, target_seq = seq_data_prep(
+            encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
                 padded_batch,
                 input_keep=test_input_keep,
                 start_index=2,
@@ -59,7 +61,7 @@ def train_vae(
     model_dir, optimizer='Adam', lr=1e-3, kl_growth=0.0015, input_keep=1,
     test_input_keep=0, start_index=2, end_index=3, generate_len=100,
     temperature=0.8, log_interval=100, eval_interval=200,
-    save_interval=200, loss_tracker={}, train_logger=None, val_logger=None,
+    save_interval=200, loss_tracker=None, train_logger=None, val_logger=None,
     logger=None
 ):  # yapf: disable
     """
@@ -106,6 +108,16 @@ def train_vae(
     Returns:
          dict: updated loss_tracker.
     """
+    if loss_tracker is None:
+        loss_tracker = {
+            'test_loss_a': 10e4,
+            'test_rec_a': 10e4,
+            'test_kld_a': 10e4,
+            'ep_loss': 0,
+            'ep_rec': 0,
+            'ep_kld': 0
+        }
+
     device = get_device()
     vae_model = model.to(device)
     vae_model.train()
@@ -116,7 +128,7 @@ def train_vae(
         global_step = (epoch - 1) * len(train_dataloader) + _iter
         padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
         padded_batch = padded_batch.to(device)
-        encoder_seq, decoder_seq, target_seq = seq_data_prep(
+        encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
             padded_batch,
             input_keep=input_keep,
             start_index=start_index,
@@ -174,7 +186,7 @@ def train_vae(
                 next(molecule_iter).tolist()
             )
             logger.info(
-                '\nSample Generated Molecule:\n {}'.format(
+                '\nSample Generated Molecule:\n{}'.format(
                     smiles_language.token_indexes_to_smiles(
                         next(molecule_iter).tolist()
                     )

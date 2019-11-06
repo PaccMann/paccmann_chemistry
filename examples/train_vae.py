@@ -142,7 +142,6 @@ def main(parser_namespace):
         gru_decoder = StackGRUDecoder(params).to(device)
         gru_vae = TeacherVAE(gru_encoder, gru_decoder).to(device)
         loss_tracker = {
-            'train_loss': 0,
             'test_loss_a': 10e4,
             'test_rec_a': 10e4,
             'test_kld_a': 10e4,
@@ -182,7 +181,8 @@ def main(parser_namespace):
                 val_logger=val_logger,
                 logger=logger
             )
-            logger.info('Epoch {0}, took {1:.1f}.'.format(epoch, time() - t))
+            logger.info(f'Epoch {epoch}, took {time() - t:.1f}.')
+
         logger.info(
             'OVERALL: \t Best loss = {0:.4f} in Ep {1}, '
             'best Rec = {2:.4f} in Ep {3}, '
@@ -194,7 +194,7 @@ def main(parser_namespace):
         )
         logger.info('Training done, shutting down.')
     except Exception:
-        logger.exception('Exception occurred while running train_vae.py')
+        logger.exception('Exception occurred while running train_vae.py.')
 
 
 if __name__ == '__main__':

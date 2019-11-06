@@ -2,8 +2,6 @@
     "start_stop": true,
     "n_layers": 2,
     "bidirectional": true,
-    "encoder_activation": "relu",
-    "decoder_activation": "relu",
     "epochs": 50,
     "batch_size": 128,
     "hidden_size": 256,
