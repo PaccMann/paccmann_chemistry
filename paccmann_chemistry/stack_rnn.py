@@ -243,11 +243,11 @@ class StackGRU(nn.Module):
         generated_seq = prime_input.transpose(0, 2)
         # Use priming string to "build up" hidden state
         for prime_entry in prime_input[:-1]:
-            _, hidden, stack = self.forward(prime_entry, hidden, stack)
+            _, hidden, stack = self(prime_entry, hidden, stack)
         input_token = prime_input[-1]
 
         for _ in range(generate_len):
-            output, hidden, stack = self.forward(input_token, hidden, stack)
+            output, hidden, stack = self(input_token, hidden, stack)
 
             # Sample from the network as a multinomial distribution
             output_dist = output.data.cpu().view(batch_size,
