@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from .hyperparams import OPTIMIZER_FACTORY
-from .utils import get_device
+from ..utils.hyperparams import OPTIMIZER_FACTORY
+from ..utils import get_device
 
 
 class StackGRU(nn.Module):
@@ -64,7 +64,8 @@ class StackGRU(nn.Module):
         )
 
         self.encoder = nn.Embedding(
-            self.input_size, self.hidden_size,
+            self.input_size,
+            self.hidden_size,
             padding_idx=params.get('pad_index', 0)
         )
         self.gru = nn.GRU(
@@ -170,8 +171,7 @@ class StackGRU(nn.Module):
 
         return Variable(
             torch.zeros(
-                self.n_layers * self.n_directions, batch_size,
-                self.hidden_size
+                self.n_layers * self.n_directions, batch_size, self.hidden_size
             )
         )
 

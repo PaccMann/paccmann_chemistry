@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from .stack_rnn import StackGRU
-from .utils import get_device
+from ..utils import get_device
 
 
 class StackGRUEncoder(StackGRU):
