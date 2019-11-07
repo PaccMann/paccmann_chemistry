@@ -1,7 +1,7 @@
 """Loss Functions."""
 import torch
 
-from .utils import kl_weight
+from . import kl_weight
 
 
 def vae_loss_function(

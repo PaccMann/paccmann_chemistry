@@ -7,12 +7,12 @@ import os
 import sys
 from time import time
 # The logger imports tensorflow which needs to be imported before torch.
-from paccmann_chemistry.logger import Logger
+from paccmann_chemistry.utils.logger import Logger
 from paccmann_chemistry.utils import collate_fn, get_device
-from paccmann_chemistry.models import (
+from paccmann_chemistry.models.vae import (
     StackGRUDecoder, StackGRUEncoder, TeacherVAE
 )
-from paccmann_chemistry.training import train_vae
+from paccmann_chemistry.models.training import train_vae
 from pytoda.datasets import SMILESDataset
 from pytoda.smiles.smiles_language import SMILESLanguage
 import torch
