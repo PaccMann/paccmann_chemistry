@@ -1,14 +1,12 @@
 dist: trusty
 services:
-- docker
+  - docker
 before_script:
-- docker pull drugilsberg/rdkit-ubuntu:latest
-- docker build -f .travis/Dockerfile -t chemistry .
+  - docker pull drugilsberg/rdkit-ubuntu:latest
+  - docker build -f .travis/Dockerfile -t chemistry .
 script:
-- docker run -it chemistry python3 -c "import paccmann_chemistry"
-- docker run -it chemistry python3 examples/train_vae.py -h
+  - docker run -it chemistry python3 -c "import paccmann_chemistry"
+  - docker run -it chemistry python3 examples/train_vae.py -h
 notifications:
   slack:
-    secure: h9kC5iKQaSEUR/ByAtNSFF9eokA5sEAPoHI3lwrDzf0+nlPhtYRAbbgTkyuH1XpwfiSv5o6ktbNHqkDkZCSALqGNx5y/EhIU8CbUsRLlRROYl5U5Igh9BYn63dY6SUbtzBvocIHIN5/02bNV3rjOun7JJDpRkkOFrg7SdPjLAQrhZVpkC5FzGgvQd3OMyYyP7br3VVMzPfjvusCVEin4nOavsmDdc3xqGCxX66GRAZGW6wDpUFPWU8dEGxJjHb012jB/+HP3jfWzdgjEGCxrLS76fWZwPedF89JiDFKUcz1exCivC2MZWULu0P/8E+RRj10zMSD+0U2GG4BKBDWVg0u/JXB3iIX38qGamKtPEKeHc45KCSQOLkmnAndLaS3v5kPHPK68mTEhRyX2l+LVKbWnRR+Nm22JIWZptmShxhs7gecJIN/qGYTHp8sykA7/9JBXedLT578z6xOC74BcOZYYE+yHnDvXtqQFXcM9qMsCPmVggI+4DTn9LDtms+A5TD20CW0W/HY7nit44NCv85qwcaC7bN/rFUeBFN+SLcHCaIgtEqqLLm3Gl3a8nxIo2w+yQHbZEbiHskYbiZxLgTWeWg85tbpWMZrmDJviflhRBnE7Yc9O5K55YlevL/oCJ6AKVD3QHX4KTdoybjlODjgCKtHhmdh0pgT/e9M/4L8=
-    on_success: always
-    on_failure: always
+    secure: AEVxdiVh+ysijnz8uLuPX6sBYiXDeEK/kbZ02N/irM5txclPrQZsYDjqCA0TcynYBY/0zPrv3IWh3dPcnFd8vU8DMRPeXqkt8GzjH1CDzr9MLDibcHjf2M7jcpLmYrK4OVUWOxRNZvQEs6bkxKVxNM7OtJAMd0PEZ4MC3LXBcCaVGDQE0keiywhK0yk5YZQAf4X2qpIduRK6pShXd7vKJ/E9ubEI+fACgbsCQ6BxL3NKaHKDedj3MJxxOZMjFftQCgRakOdCNi372WuniN2L8Q47RRMv676kvVvB3DIZK39GIJuO7JTgJhtS6iZzSRsrLIwWAk3RwIts2qRSKaYZ53rt9FQb0Ie7jSOpWV0Qts8jLU2LluaF6rJt/jyIp08ABQ5WuMfEnYLMpSqSF/Rn/I21r1DEuLeaNNgtNzQoENkayL+PeWf11gqGh/EbqEiyUNg8wluVeGr6SoWXyhPJM/qlbx2dDix01wZCrRbOy3DKVzzZaaV5kRCTJC/J5lYn9ZNk1xFZ3oQh0wAuBxIcnDnciDxjdQnD7eTkFYhizZ8HOGBZDP1LvmhW3h4e1YHfuKK71eiK1VQk0Lo8aC3yUoBLVzwdvlyE6Vvt5mP3pniEb0Nkd8BfXB28s+IQnCvZfI+QsFD07LIjGKP78R/UbDxMfvRAwHcdj8WWBuP+gjY=
