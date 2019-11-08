@@ -9,7 +9,7 @@ from ..utils import get_device
 
 
 class StackGRUEncoder(StackGRU):
-    """Stacked GRU Encoder."""
+    """Stack GRU Encoder."""
 
     def __init__(self, params):
         """
@@ -21,7 +21,7 @@ class StackGRUEncoder(StackGRU):
         Items in params:
             latent_dim (int): Size of latent mean and variance.
             input_size (int): Vocabulary size.
-            hidden_size (int): Hidden size of GRU.
+            rnn_cell_size (int): Hidden size of GRU.
             output_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
@@ -39,12 +39,12 @@ class StackGRUEncoder(StackGRU):
         """
         super(StackGRUEncoder, self).__init__(params)
         self.latent_dim = params['latent_dim']
-        self.hidden_to_mu = nn.Linear(
-            in_features=self.hidden_size * self.n_directions,
+        self.rnn_to_mu = nn.Linear(
+            in_features=self.rnn_cell_size * self.n_directions,
             out_features=self.latent_dim
         )
-        self.hidden_to_logvar = nn.Linear(
-            in_features=self.hidden_size * self.n_directions,
+        self.rnn_to_logvar = nn.Linear(
+            in_features=self.rnn_cell_size * self.n_directions,
             out_features=self.latent_dim
         )
 
@@ -74,14 +74,15 @@ class StackGRUEncoder(StackGRU):
 
         # Reshape to disentangle layers and directions
         hidden = hidden.view(
-            self.n_layers, self.n_directions, self.batch_size, self.hidden_size
+            self.n_layers, self.n_directions, self.batch_size,
+            self.rnn_cell_size
         )
         # Discard all but last layer, concatenate forward/backward
         hidden = hidden[-1, :, :, :].view(
-            self.batch_size, self.hidden_size * self.n_directions
+            self.batch_size, self.rnn_cell_size * self.n_directions
         )
-        mu = self.hidden_to_mu(hidden)
-        logvar = self.hidden_to_logvar(hidden)
+        mu = self.rnn_to_mu(hidden)
+        logvar = self.rnn_to_logvar(hidden)
 
         return mu, logvar
 
@@ -118,8 +119,8 @@ class StackGRUDecoder(StackGRU):
         super(StackGRUDecoder, self).__init__(params, *args, **kwargs)
         self.params = params
         self.latent_dim = params['latent_dim']
-        self.latent_to_hidden = nn.Linear(
-            in_features=self.latent_dim, out_features=self.hidden_size
+        self.latent_to_rnn = nn.Linear(
+            in_features=self.latent_dim, out_features=self.rnn_cell_size
         )
 
     def decoder_train_step(self, latent_z, input_seq, target_seq):
@@ -144,7 +145,7 @@ class StackGRUDecoder(StackGRU):
         Returns:
             The cross-entropy training loss for the decoder.
         """
-        hidden = self.latent_to_hidden(latent_z)
+        hidden = self.latent_to_rnn(latent_z)
         stack = self.init_stack()
         loss = 0
         for input_entry, target_entry in zip(input_seq, target_seq):
@@ -191,7 +192,7 @@ class StackGRUDecoder(StackGRU):
         n_layers = self.n_layers
         n_directions = self.n_directions
         latent_z = latent_z.repeat(n_layers * n_directions, 1, 1)
-        hidden = self.latent_to_hidden(latent_z)
+        hidden = self.latent_to_rnn(latent_z)
         batch_size = hidden.shape[1]
         stack = self.init_stack(batch_size)
         prime_input = prime_input.repeat(batch_size, 1)

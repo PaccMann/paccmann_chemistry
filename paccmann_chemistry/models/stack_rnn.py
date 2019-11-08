@@ -1,11 +1,13 @@
 """Stack Augmented GRU Implementation."""
+import warnings
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from ..utils.hyperparams import OPTIMIZER_FACTORY
 from ..utils import get_device
+from ..utils.hyperparams import OPTIMIZER_FACTORY
 
 
 class StackGRU(nn.Module):
@@ -24,7 +26,8 @@ class StackGRU(nn.Module):
 
         Items in params:
             input_size (int): Vocabulary size.
-            hidden_size (int): Hidden size of GRU.
+            embedding_size (int): The embedding size for the dict tokens
+            rnn_cell_size (int): Hidden size of GRU.
             output_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
@@ -44,7 +47,8 @@ class StackGRU(nn.Module):
         super(StackGRU, self).__init__()
 
         self.input_size = params['input_size']
-        self.hidden_size = params['hidden_size']
+        self.embedding_size = params['embedding_size']
+        self.rnn_cell_size = params['rnn_cell_size']
         self.output_size = params['output_size']
         self.stack_width = params['stack_width']
         self.stack_depth = params['stack_depth']
@@ -57,31 +61,33 @@ class StackGRU(nn.Module):
 
         # Network
         self.stack_controls_layer = nn.Linear(
-            in_features=self.hidden_size, out_features=3
+            in_features=self.rnn_cell_size, out_features=3
         )
         self.stack_input_layer = nn.Linear(
-            in_features=self.hidden_size, out_features=self.stack_width
+            in_features=self.rnn_cell_size, out_features=self.stack_width
         )
 
         self.encoder = nn.Embedding(
             self.input_size,
-            self.hidden_size,
+            self.embedding_size,
             padding_idx=params.get('pad_index', 0)
         )
         self.gru = nn.GRU(
-            self.hidden_size + self.stack_width,
-            self.hidden_size,
+            self.embedding_size + self.stack_width,
+            self.rnn_cell_size,
             self.n_layers,
             bidirectional=self.bidirectional,
             dropout=params['dropout']
         )
         self.decoder = nn.Linear(
-            self.hidden_size * self.n_directions, self.output_size
+            self.rnn_cell_size * self.n_directions, self.output_size
         )
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = OPTIMIZER_FACTORY[
             params.get('optimizer', 'Adadelta')
         ](self.parameters(), lr=params.get('lr', 0.01))  # yapf: disable
+
+        self._check_params()
 
     def forward(self, input_token, hidden, stack):
         """
@@ -91,7 +97,7 @@ class StackGRU(nn.Module):
             input_token (torch.Tensor): LongTensor containing
                 indices of the input token of size `[1, batch_size]`.
             hidden (torch.Tensor): Hidden state of size
-                `[n_layers*n_directions, batch_size, hidden_size]`.
+                `[n_layers*n_directions, batch_size, rnn_cell_size]`.
             stack (torch.Tensor): Previous step's stack of size
                 `[batch_size, stack_depth, stack_width]`.
 
@@ -99,7 +105,7 @@ class StackGRU(nn.Module):
             (torch.Tensor, torch.Tensor, torch.Tensor): output, hidden, stack.
 
             Output of size `[batch_size, output_size]`.
-            Hidden state of size `[1, batch_size, hidden_size]`.
+            Hidden state of size `[1, batch_size, rnn_cell_size]`.
             Stack of size `[batch_size, stack_depth, stack_width]`.
         """
         if input_token.shape[0] != 1:
@@ -165,13 +171,14 @@ class StackGRU(nn.Module):
             return Variable(
                 torch.zeros(
                     self.n_layers * self.n_directions, batch_size,
-                    self.hidden_size
+                    self.rnn_cell_size
                 ).cuda()
             )
 
         return Variable(
             torch.zeros(
-                self.n_layers * self.n_directions, batch_size, self.hidden_size
+                self.n_layers * self.n_directions, batch_size,
+                self.rnn_cell_size
             )
         )
 
@@ -264,3 +271,12 @@ class StackGRU(nn.Module):
             if batch_size == 1 and top_idx == end_token:
                 break
         return generated_seq
+
+    def _check_params(self):
+        """
+        Runs size checks on input parameter
+
+        """
+
+        if self.rnn_cell_size < self.embedding_size:
+            warnings.warn('Refrain from squashing embeddings in RNN cells')
