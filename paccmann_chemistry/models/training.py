@@ -64,8 +64,7 @@ def train_vae(
     model_dir, optimizer='Adam', lr=1e-3, kl_growth=0.0015, input_keep=1.,
     test_input_keep=0., start_index=2, end_index=3, generate_len=100,
     temperature=0.8, log_interval=100, eval_interval=200,
-    save_interval=200, loss_tracker=None, train_logger=None, val_logger=None,
-    logger=None
+    save_interval=200, loss_tracker=None, logger=None
 ):  # yapf: disable
     """
     VAE train function.
@@ -102,10 +101,6 @@ def train_vae(
         save_interval (int): The interval at which the model is saved.
         loss_tracker (dict): At each log_interval, update improved test
             losses and respective epoch.
-        train_logger (Logger): Tensorboard logger objects to
-        log scalars to tfevent file.
-        val_logger (Logger): Tensorboard logger objects to
-        log scalars to tfevent file.
         logger (logging.Logger): To display information on the fly.
 
     Returns:
@@ -155,16 +150,6 @@ def train_vae(
                 f'Loss: {train_loss/log_interval:2.4f}, time spent: {time()-t}'
             )
             t = time()
-            if train_logger:
-                train_logger.scalar_summary(
-                    'loss', train_loss / log_interval, global_step
-                )
-                train_logger.scalar_summary(
-                    'decoder_loss', decoder_loss.item(), global_step
-                )
-                train_logger.scalar_summary(
-                    'KL-div', kl_div.item(), global_step
-                )
             train_loss = 0
         if _iter and _iter % save_interval == 0:
             save_dir = os.path.join(
@@ -195,16 +180,14 @@ def train_vae(
                     )
                 )
             )
-            if val_logger:
-                test_loss, test_rec, test_kld = test_vae(
-                    vae_model, val_dataloader, logger, test_input_keep
-                )
-                val_logger.scalar_summary('test_loss', test_loss, global_step)
-                logger.info(
-                    f'***TESTING*** \t Epoch {epoch}, test loss = '
-                    f'{test_loss:.4f}, reconstruction = {test_rec:.4f}, '
-                    f'KL = {test_kld:.4f}.'
-                )
+            test_loss, test_rec, test_kld = test_vae(
+                vae_model, val_dataloader, logger, test_input_keep
+            )
+            logger.info(
+                f'***TESTING*** \t Epoch {epoch}, test loss = '
+                f'{test_loss:.4f}, reconstruction = {test_rec:.4f}, '
+                f'KL = {test_kld:.4f}.'
+            )
 
             if test_loss < loss_tracker['test_loss_a']:
                 loss_tracker.update(

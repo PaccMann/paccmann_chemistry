@@ -6,8 +6,7 @@ dependencies:
   - python>=3.6,<3.8
   - pip>=19.1
   - pip:
-      - pytoda @ git+https://git@github.com/PaccMann/paccmann_datasets@0.0.1
+      - pytoda @ git+https://git@github.com/PaccMann/paccmann_datasets@0.0.2
       - numpy>=1.14.3
-      - tensorflow>=1.10.0,<2.0
       - absl-py>=0.8.1
       - torch>=1.0.1

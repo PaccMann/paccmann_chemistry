@@ -6,8 +6,6 @@ import logging
 import os
 import sys
 from time import time
-# The logger imports tensorflow which needs to be imported before torch.
-from paccmann_chemistry.utils.logger import Logger
 from paccmann_chemistry.utils import collate_fn, get_device
 from paccmann_chemistry.models.vae import (
     StackGRUDecoder, StackGRUEncoder, TeacherVAE
@@ -73,9 +71,6 @@ def main(parser_namespace):
         os.makedirs(os.path.join(model_dir, 'results'), exist_ok=True)
         os.makedirs(log_path, exist_ok=True)
         os.makedirs(val_dir, exist_ok=True)
-
-        train_logger = Logger(log_path)
-        val_logger = Logger(val_dir)
 
         # Load SMILES language
         smiles_language = SMILESLanguage.load(smiles_language_filepath)
@@ -177,8 +172,6 @@ def main(parser_namespace):
                 save_interval=params['save_interval'],
                 eval_interval=params['eval_interval'],
                 loss_tracker=loss_tracker,
-                train_logger=train_logger,
-                val_logger=val_logger,
                 logger=logger
             )
             logger.info(f'Epoch {epoch}, took {time() - t:.1f}.')
