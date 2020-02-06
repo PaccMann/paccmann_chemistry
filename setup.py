@@ -15,7 +15,6 @@ setup(
     install_requires=[
         'numpy',
         'torch>=1.0.0',
-        'tensorflow>=1.10,<2.0',
     ],
     packages=find_packages('.'),
     zip_safe=False,
