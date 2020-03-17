@@ -9,7 +9,7 @@ from ..utils import get_device
 
 
 class StackGRUEncoder(StackGRU):
-    """Stack GRU Encoder."""
+    """Stacked GRU Encoder."""
 
     def __init__(self, params):
         """
@@ -21,7 +21,7 @@ class StackGRUEncoder(StackGRU):
         Items in params:
             latent_dim (int): Size of latent mean and variance.
             input_size (int): Vocabulary size.
-            rnn_cell_size (int): Hidden size of GRU.
+            hidden_size (int): Hidden size of GRU.
             output_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
@@ -39,12 +39,12 @@ class StackGRUEncoder(StackGRU):
         """
         super(StackGRUEncoder, self).__init__(params)
         self.latent_dim = params['latent_dim']
-        self.rnn_to_mu = nn.Linear(
-            in_features=self.rnn_cell_size * self.n_directions,
+        self.hidden_to_mu = nn.Linear(
+            in_features=self.hidden_size * self.n_directions,
             out_features=self.latent_dim
         )
-        self.rnn_to_logvar = nn.Linear(
-            in_features=self.rnn_cell_size * self.n_directions,
+        self.hidden_to_logvar = nn.Linear(
+            in_features=self.hidden_size * self.n_directions,
             out_features=self.latent_dim
         )
 
@@ -64,7 +64,7 @@ class StackGRUEncoder(StackGRU):
             (torch.Tensor, torch.Tensor): mu, logvar
 
             mu is the latent mean of shape `[1, batch_size, latent_dim]`.
-            logvaris the log of the latent variance of shape
+            logvar is the log of the latent variance of shape
                 `[1, batch_size, latent_dim]`.
         """
         hidden = self.init_hidden()
@@ -74,15 +74,14 @@ class StackGRUEncoder(StackGRU):
 
         # Reshape to disentangle layers and directions
         hidden = hidden.view(
-            self.n_layers, self.n_directions, self.batch_size,
-            self.rnn_cell_size
+            self.n_layers, self.n_directions, self.batch_size, self.hidden_size
         )
         # Discard all but last layer, concatenate forward/backward
         hidden = hidden[-1, :, :, :].view(
-            self.batch_size, self.rnn_cell_size * self.n_directions
+            self.batch_size, self.hidden_size * self.n_directions
         )
-        mu = self.rnn_to_mu(hidden)
-        logvar = self.rnn_to_logvar(hidden)
+        mu = self.hidden_to_mu(hidden)
+        logvar = self.hidden_to_logvar(hidden)
 
         return mu, logvar
 
@@ -119,8 +118,8 @@ class StackGRUDecoder(StackGRU):
         super(StackGRUDecoder, self).__init__(params, *args, **kwargs)
         self.params = params
         self.latent_dim = params['latent_dim']
-        self.latent_to_rnn = nn.Linear(
-            in_features=self.latent_dim, out_features=self.rnn_cell_size
+        self.latent_to_hidden = nn.Linear(
+            in_features=self.latent_dim, out_features=self.hidden_size
         )
 
     def decoder_train_step(self, latent_z, input_seq, target_seq):
@@ -145,12 +144,15 @@ class StackGRUDecoder(StackGRU):
         Returns:
             The cross-entropy training loss for the decoder.
         """
-        hidden = self.latent_to_rnn(latent_z)
+        hidden = self.latent_to_hidden(latent_z)
         stack = self.init_stack()
         loss = 0
         for input_entry, target_entry in zip(input_seq, target_seq):
-            output, hidden, stack = self(input_entry, hidden, stack)
+            output, hidden, stack = self(
+                input_entry.unsqueeze(0), hidden, stack
+            )
             loss += self.criterion(output, target_entry.squeeze())
+
         return loss
 
     def generate_from_latent(
@@ -192,7 +194,8 @@ class StackGRUDecoder(StackGRU):
         n_layers = self.n_layers
         n_directions = self.n_directions
         latent_z = latent_z.repeat(n_layers * n_directions, 1, 1)
-        hidden = self.latent_to_rnn(latent_z)
+        # TODO: Is this a common thing to do?
+        hidden = self.latent_to_hidden(latent_z)
         batch_size = hidden.shape[1]
         stack = self.init_stack(batch_size)
         prime_input = prime_input.repeat(batch_size, 1)
@@ -207,16 +210,27 @@ class StackGRUDecoder(StackGRU):
         for _ in range(generate_len):
             output, hidden, stack = self(input_token, hidden, stack)
 
-            # Sample from the network as a multinomial distribution
-            output_dist = output.data.cpu().view(batch_size, -1).div(
-                temperature
-            ).exp().double()    # yapf: disable
-            top_idx = torch.tensor(
-                torch.multinomial(output_dist, 1).cpu().numpy()
-            )
+            if self.params.get('decoding_search', 'sampling') == 'argmax':
+                _, top_idx = torch.max(output, 1)
+                top_idx = top_idx.unsqueeze(1).unsqueeze(2)
+
+            elif self.params.get('decoding_search', 'sampling') == 'sampling':
+                # Sample from the network as a multinomial distribution
+                output_dist = output.data.cpu().view(batch_size, -1).div(
+                    temperature
+                ).exp().double()    # yapf: disable
+                top_idx = torch.tensor(
+                    torch.multinomial(output_dist, 1).cpu().numpy()
+                ).unsqueeze(2)
+            elif self.params.get(
+                'decoding_search', 'sampling'
+            ) == 'beam_search':
+                # TODO
+                raise ValueError('Beam Search not yet implemented.')
+
             # Add generated_seq character to string and use as next input
             generated_seq = torch.cat(
-                (generated_seq, top_idx.unsqueeze(2)),
+                (generated_seq, top_idx),
                 dim=2
             )   # yapf: disable
             input_token = top_idx.view(1, -1)
@@ -332,7 +346,7 @@ class TeacherVAE(nn.Module):
                 `[1, batch_size, latent_dim]`.
         """
         mu, logvar = self.encode(input_seq)
-        latent_z = self.reparameterize(mu, logvar)
+        latent_z = self.reparameterize(mu, logvar).unsqueeze(0)
         decoder_loss = self.decode(latent_z, decoder_seq, target_seq)
         return decoder_loss, mu, logvar
 
