@@ -4,8 +4,7 @@
     "bidirectional": true,
     "epochs": 50,
     "batch_size": 128,
-    "embedding_size": 64,
-    "rnn_cell_size": 256,
+    "hidden_size": 256,
     "latent_dim": 128,
     "stack_width": 50,
     "stack_depth": 50,
@@ -17,9 +16,9 @@
     "input_keep": 0.95,
     "test_input_keep": 1.0,
     "temperature": 0.8,
-    "log_interval": 5,
+    "log_interval": 1,
     "save_interval": 1000,
-    "eval_interval": 1000,
+    "eval_interval": 4,
     "num_workers": 0,
     "pin_memory": false
 }
