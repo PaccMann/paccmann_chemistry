@@ -6,13 +6,12 @@ import logging
 import os
 import sys
 from time import time
-# The logger imports tensorflow which needs to be imported before torch.
-from paccmann_chemistry.utils.logger import Logger
 from paccmann_chemistry.utils import collate_fn, get_device
 from paccmann_chemistry.models.vae import (
     StackGRUDecoder, StackGRUEncoder, TeacherVAE
 )
 from paccmann_chemistry.models.training import train_vae
+from paccmann_chemistry.utils.utils import disable_rdkit_logging
 from pytoda.datasets import SMILESDataset
 from pytoda.smiles.smiles_language import SMILESLanguage
 import torch
@@ -52,6 +51,7 @@ parser.add_argument(
 
 def main(parser_namespace):
     try:
+        disable_rdkit_logging()
         # read the params json
         params = dict()
         with open(parser_namespace.params_filepath) as f:
@@ -73,9 +73,6 @@ def main(parser_namespace):
         os.makedirs(os.path.join(model_dir, 'results'), exist_ok=True)
         os.makedirs(log_path, exist_ok=True)
         os.makedirs(val_dir, exist_ok=True)
-
-        train_logger = Logger(log_path)
-        val_logger = Logger(val_dir)
 
         # Load SMILES language
         smiles_language = SMILESLanguage.load(smiles_language_filepath)
@@ -115,6 +112,11 @@ def main(parser_namespace):
                     [list(vocab_dict.values()).index('<STOP>')]
             }
         )
+        # Update the smiles_vocabulary size
+        if not params.get('embedding', 'learned') == 'pretrained':
+            params.update({'input_size': smiles_language.number_of_tokens})
+            params.update({'output_size': smiles_language.number_of_tokens})
+
         with open(os.path.join(model_dir, 'model_params.json'), 'w') as fp:
             json.dump(params, fp)
 
@@ -177,8 +179,6 @@ def main(parser_namespace):
                 save_interval=params['save_interval'],
                 eval_interval=params['eval_interval'],
                 loss_tracker=loss_tracker,
-                train_logger=train_logger,
-                val_logger=val_logger,
                 logger=logger
             )
             logger.info(f'Epoch {epoch}, took {time() - t:.1f}.')
