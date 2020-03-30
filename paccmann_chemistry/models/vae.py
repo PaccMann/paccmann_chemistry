@@ -21,7 +21,7 @@ class StackGRUEncoder(StackGRU):
         Items in params:
             latent_dim (int): Size of latent mean and variance.
             input_size (int): Vocabulary size.
-            hidden_size (int): Hidden size of GRU.
+            rnn_cell_size (int): Hidden size of GRU.
             output_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
@@ -40,11 +40,11 @@ class StackGRUEncoder(StackGRU):
         super(StackGRUEncoder, self).__init__(params)
         self.latent_dim = params['latent_dim']
         self.hidden_to_mu = nn.Linear(
-            in_features=self.hidden_size * self.n_directions,
+            in_features=self.rnn_cell_size * self.n_directions,
             out_features=self.latent_dim
         )
         self.hidden_to_logvar = nn.Linear(
-            in_features=self.hidden_size * self.n_directions,
+            in_features=self.rnn_cell_size * self.n_directions,
             out_features=self.latent_dim
         )
 
@@ -74,11 +74,12 @@ class StackGRUEncoder(StackGRU):
 
         # Reshape to disentangle layers and directions
         hidden = hidden.view(
-            self.n_layers, self.n_directions, self.batch_size, self.hidden_size
+            self.n_layers, self.n_directions, self.batch_size,
+            self.rnn_cell_size
         )
         # Discard all but last layer, concatenate forward/backward
         hidden = hidden[-1, :, :, :].view(
-            self.batch_size, self.hidden_size * self.n_directions
+            self.batch_size, self.rnn_cell_size * self.n_directions
         )
         mu = self.hidden_to_mu(hidden)
         logvar = self.hidden_to_logvar(hidden)
@@ -99,7 +100,7 @@ class StackGRUDecoder(StackGRU):
         Items in params:
             latent_dim (int): Size of latent mean and variance.
             input_size (int): Vocabulary size.
-            hidden_size (int): Hidden size of GRU.
+            rnn_cell_size (int): Hidden size of GRU.
             output_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
@@ -119,7 +120,7 @@ class StackGRUDecoder(StackGRU):
         self.params = params
         self.latent_dim = params['latent_dim']
         self.latent_to_hidden = nn.Linear(
-            in_features=self.latent_dim, out_features=self.hidden_size
+            in_features=self.latent_dim, out_features=self.rnn_cell_size
         )
 
     def decoder_train_step(self, latent_z, input_seq, target_seq):
