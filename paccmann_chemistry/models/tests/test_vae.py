@@ -41,9 +41,7 @@ class TestStackGRUEncoder(unittest.TestCase):
 
         # Emulate the hidden layer of the GRU
         hidden = np.tile(correct_sample, n_layers)  # Lx(D*C)
-        hidden = hidden.reshape(
-            n_layers * n_directions, cell_size
-        )  # (L*D)xC
+        hidden = hidden.reshape(n_layers * n_directions, cell_size)  # (L*D)xC
         hidden = [torch.Tensor(hidden) for _ in range(batch_size)]
         hidden = torch.stack(hidden, dim=1)  # LDxBxC
 
@@ -71,8 +69,14 @@ class TestStackGRUEncoder(unittest.TestCase):
         for _mu in mus.unbind():
             # NOTE: I assume there may be some tiny numerical differences
             # between the outputs (e.g. roundoff error)
-            self.assertTrue(np.allclose(_mu.tolist(), first_mu))
+            self.assertTrue(
+                np.allclose(_mu.tolist(), first_mu, rtol=1e-4, atol=1e-7)
+            )
 
         first_logvar = logvars[0].tolist()
         for _logvar in logvars.unbind():
-            self.assertTrue(np.allclose(_logvar.tolist(), first_logvar))
+            self.assertTrue(
+                np.allclose(
+                    _logvar.tolist(), first_logvar, rtol=1e-4, atol=1e-7
+                )
+            )
