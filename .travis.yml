@@ -6,6 +6,7 @@ before_script:
   - docker build -f .travis/Dockerfile -t chemistry .
 script:
   - docker run -it chemistry python3 -c "import paccmann_chemistry"
+  - docker run -it chemistry python3 -m unittest discover -t . -p "test_*py" paccmann_chemistry
   - docker run -it chemistry python3 examples/train_vae.py -h
 notifications:
   slack:
