@@ -72,19 +72,41 @@ class StackGRUEncoder(StackGRU):
         for input_entry in input_seq:
             output, hidden, stack = self(input_entry, hidden, stack)
 
+        hidden = self._post_gru_reshape(hidden)
+
+        mu = self.hidden_to_mu(hidden)
+        logvar = self.hidden_to_logvar(hidden)
+
+        return mu, logvar
+
+    def _post_gru_reshape(self, hidden: torch.Tensor) -> torch.Tensor:
+        expected_shape = torch.tensor([
+            self.n_layers * self.n_directions, self.batch_size,
+            self.rnn_cell_size
+        ])
+        if not torch.equal(torch.tensor(hidden.shape), expected_shape):
+            raise ValueError(
+                f'GRU hidden layer has incorrect shape: {hidden.shape}. '
+                f'Expected shape: {expected_shape}'
+            )
+
         # Reshape to disentangle layers and directions
         hidden = hidden.view(
             self.n_layers, self.n_directions, self.batch_size,
             self.rnn_cell_size
         )
-        # Discard all but last layer, concatenate forward/backward
-        hidden = hidden[-1, :, :, :].view(
+        # Layers x Directions x Batch x Cell_size -> D x B x C
+        hidden = hidden[-1, :, :, :]
+
+        # D x B x C -> B x D x C
+        hidden = hidden.permute(1, 0, 2)
+
+        # B x D x C -> B x D*C
+        hidden = hidden.reshape(
             self.batch_size, self.rnn_cell_size * self.n_directions
         )
-        mu = self.hidden_to_mu(hidden)
-        logvar = self.hidden_to_logvar(hidden)
 
-        return mu, logvar
+        return hidden
 
 
 class StackGRUDecoder(StackGRU):
