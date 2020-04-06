@@ -195,16 +195,17 @@ def train_vae(
                     )
                 )
             )
+            test_loss, test_rec, test_kld = test_vae(
+                vae_model, val_dataloader, logger, test_input_keep
+            )
+            logger.info(
+                f'***TESTING*** \t Epoch {epoch}, test loss = '
+                f'{test_loss:.4f}, reconstruction = {test_rec:.4f}, '
+                f'KL = {test_kld:.4f}.'
+            )
+
             if val_logger:
-                test_loss, test_rec, test_kld = test_vae(
-                    vae_model, val_dataloader, logger, test_input_keep
-                )
                 val_logger.scalar_summary('test_loss', test_loss, global_step)
-                logger.info(
-                    f'***TESTING*** \t Epoch {epoch}, test loss = '
-                    f'{test_loss:.4f}, reconstruction = {test_rec:.4f}, '
-                    f'KL = {test_kld:.4f}.'
-                )
 
             if test_loss < loss_tracker['test_loss_a']:
                 loss_tracker.update(
@@ -238,7 +239,7 @@ def train_vae(
                 )
                 logger.info(
                     f'Epoch {epoch}. NEW best KLD = {test_kld:.4f} \t (loss '
-                    '= {test_loss:.4f}, Reconstruction = {test_rec:.4f}).'
+                    f'= {test_loss:.4f}, Reconstruction = {test_rec:.4f}).'
                 )
             with open(os.path.join(model_dir, 'loss_tracker.json'), 'w') as fp:
                 json.dump(loss_tracker, fp)
