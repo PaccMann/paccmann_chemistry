@@ -2,8 +2,9 @@ import unittest
 import numpy as np
 import torch
 
-from paccmann_chemistry.models.vae import StackGRUEncoder
-
+from paccmann_chemistry.models.vae import \
+    StackGRUEncoder, StackGRUDecoder, TeacherVAE
+from paccmann_chemistry.models.training import sequential_data_preparation
 # pylint: disable=not-callable, no-member
 
 
@@ -23,6 +24,9 @@ class TestStackGRUEncoder(unittest.TestCase):
         'batch_size': 32,
         'bidirectional': True
     }
+
+    def assertListsClose(self, var1, var2, rtol=1e-5, atol=1e-7):
+        self.assertTrue(np.allclose(var1, var2, rtol=rtol, atol=atol))
 
     def test__post_gru_reshape(self) -> None:
         """Tests if the reshaping on the hidden layer of the GRU is correct.
@@ -70,13 +74,48 @@ class TestStackGRUEncoder(unittest.TestCase):
             # NOTE: I assume there may be some tiny numerical differences
             # between the outputs (e.g. roundoff error)
             self.assertTrue(
-                np.allclose(_mu.tolist(), first_mu, rtol=1e-4, atol=1e-7)
+                np.allclose(_mu.tolist(), first_mu, rtol=1e-5, atol=1e-7)
             )
 
         first_logvar = logvars[0].tolist()
         for _logvar in logvars.unbind():
-            self.assertTrue(
-                np.allclose(
-                    _logvar.tolist(), first_logvar, rtol=1e-4, atol=1e-7
-                )
+            self.assertListsClose(_logvar.tolist(), first_logvar)
+
+    def test__encoding_independent_from_batch(self) -> None:
+        """Test that the results of a model are gonna be consistent 
+        regadless of the model's batch size"""
+
+        params = self.default_params
+        params['batch_size'] = 128
+        params['input_size'] = 50
+
+        device = torch.device('cpu')
+
+        gru_encoder = StackGRUEncoder(params).to(device)
+        state_dict = gru_encoder.state_dict()
+
+        sample = torch.tensor(np.arange(50))
+
+        def _get_sample_at_batch_size(batch_size):
+            """Helper function to iterate over the batches"""
+            params['batch_size'] = batch_size
+            gru_encoder = StackGRUEncoder(params).to(device)
+            gru_encoder.load_state_dict(state_dict)
+            gru_encoder = gru_encoder.eval()
+            batch = [sample for _ in range(params['batch_size'])]
+            padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
+            padded_batch = padded_batch.to(device)
+            encoder_seq, _, _ = sequential_data_preparation(
+                padded_batch, input_keep=1, start_index=2, end_index=49
             )
+            return gru_encoder.encoder_train_step(encoder_seq)[0][0]
+
+        batch_sizes = [1, 2, 4, 12, 55, 128]
+
+        results_by_batches = [
+            _get_sample_at_batch_size(b) for b in batch_sizes
+        ]
+
+        for i, res1 in enumerate(results_by_batches):
+            for j, res2 in enumerate(results_by_batches[i + 1:]):
+                self.assertListsClose(res1.tolist(), res2.tolist())
