@@ -108,7 +108,10 @@ class StackGRU(nn.Module):
             Hidden state of size `[1, batch_size, rnn_cell_size]`.
             Stack of size `[batch_size, stack_depth, stack_width]`.
         """
-        if input_token.shape[0] != 1:
+        if input_token.shape[0] != 1 or len(input_token.shape) < 2:
+            # It may receive a single token as input so the fist element is 1 
+            # but actially corresponding to batch size. In that case we also 
+            # resize.
             input_token = input_token.view(1, -1)
         embedded_input = self.encoder(input_token.to(self.device))
         stack_controls = self.stack_controls_layer(
