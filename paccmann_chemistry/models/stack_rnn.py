@@ -9,6 +9,8 @@ from torch.autograd import Variable
 from ..utils import get_device
 from ..utils.hyperparams import OPTIMIZER_FACTORY
 
+# pylint: disable=not-callable, no-member
+
 
 class StackGRU(nn.Module):
     """Stack Augmented Gated Recurrent Unit (GRU) class."""
@@ -55,9 +57,14 @@ class StackGRU(nn.Module):
         self.batch_size = params['batch_size']
         self.use_cuda = torch.cuda.is_available()
         self.n_layers = params['n_layers']
+        self.use_stack = params.get('use_stack', True)  # Used for testing rn
         self.bidirectional = params.get('bidirectional', False)
         self.n_directions = 2 if self.bidirectional else 1
         self.device = get_device()
+
+        self.gru_input = self.embedding_size
+        if self.use_stack:
+            self.gru_input += self.stack_width
 
         # Network
         self.stack_controls_layer = nn.Linear(
@@ -73,7 +80,7 @@ class StackGRU(nn.Module):
             padding_idx=params.get('pad_index', 0)
         )
         self.gru = nn.GRU(
-            self.embedding_size + self.stack_width,
+            self.gru_input,
             self.rnn_cell_size,
             self.n_layers,
             bidirectional=self.bidirectional,
@@ -109,11 +116,24 @@ class StackGRU(nn.Module):
             Stack of size `[batch_size, stack_depth, stack_width]`.
         """
         if input_token.shape[0] != 1 or len(input_token.shape) < 2:
-            # It may receive a single token as input so the fist element is 1 
-            # but actially corresponding to batch size. In that case we also 
+            # It may receive a single token as input so the fist element is 1
+            # but actially corresponding to batch size. In that case we also
             # resize.
             input_token = input_token.view(1, -1)
         embedded_input = self.encoder(input_token.to(self.device))
+
+        if self.use_stack:
+            inp, stack = self._stack_update(embedded_input, hidden, stack)
+        else:
+            # NOTE: At the moment, this is here for just purely testing reasons
+            inp = embedded_input
+
+        output, hidden = self.gru(inp, hidden)
+        output = self.decoder(output).squeeze()
+        return output, hidden, stack
+
+    def _stack_update(self, embedded_input, hidden, stack):
+        """Pre-gru stack update operations"""
         stack_controls = self.stack_controls_layer(
             hidden[-1, :, :].unsqueeze(0)
         )
@@ -125,9 +145,7 @@ class StackGRU(nn.Module):
         )
         stack_top = stack[:, 0, :].unsqueeze(0)
         inp = torch.cat((embedded_input, stack_top), dim=2)
-        output, hidden = self.gru(inp, hidden)
-        output = self.decoder(output).squeeze()
-        return output, hidden, stack
+        return inp, stack
 
     def stack_augmentation(self, input_val, prev_stack, controls):
         """

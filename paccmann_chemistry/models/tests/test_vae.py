@@ -80,20 +80,27 @@ class TestStackGRUEncoder(unittest.TestCase):
         for _logvar in logvars.unbind():
             self.assertListsClose(_logvar.tolist(), first_logvar)
 
-    def test__encoding_independent_from_batch(self) -> None:
-        """Test that the results of a model are gonna be consistent 
+    def test__encoding_independent_from_batch_with_stack(self) -> None:
+        self._encoding_independent_from_batch(use_stack=True)
+
+    def test__encoding_independent_from_batch_no_stack(self) -> None:
+        self._encoding_independent_from_batch(use_stack=False)
+
+    def _encoding_independent_from_batch(self, use_stack) -> None:
+        """Test that the results of a model are gonna be consistent
         regadless of the model's batch size"""
 
         params = self.default_params
         params['batch_size'] = 128
         params['input_size'] = 55
+        params['use_stack'] = use_stack
 
         device = torch.device('cpu')
 
         gru_encoder = StackGRUEncoder(params).to(device)
         state_dict = gru_encoder.state_dict()
 
-        # 2 (start index) + random token sequence
+        # 2 (start index) + ordered token sequence
         sample = np.concatenate([[2], np.arange(3, 53)])
 
         def _get_sample_at_batch_size(batch_size):
