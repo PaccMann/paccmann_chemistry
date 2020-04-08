@@ -13,13 +13,13 @@ class TestStackGRUEncoder(unittest.TestCase):
     default_params = {
         'latent_dim': 128,
         'input_size': 12,
-        'rnn_cell_size': 64,
+        'rnn_cell_size': 30,
         'embedding_size': 80,
         'output_size': 100,
         'stack_width': 50,
         'stack_depth': 51,
         'n_layers': 3,
-        'dropout': 1,
+        'dropout': .7,
         'batch_size': 32,
         'bidirectional': True
     }
@@ -55,12 +55,13 @@ class TestStackGRUEncoder(unittest.TestCase):
 
     def test__no_batch_mismatch__in__encoder_train_step(self) -> None:
         """Tests if there is any difference between equal samples in the same
-        batch. If so it may indicate some crosstalk between samples in the 
+        batch. If so it may indicate some crosstalk between samples in the
         batch
         """
         params = self.default_params
         batch_size = params['batch_size']
         gru_stack = StackGRUEncoder(params)
+        gru_stack.eval()
 
         base_sample = np.arange(10)
         base = [torch.Tensor(base_sample) for _ in range(batch_size)]

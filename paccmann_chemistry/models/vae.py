@@ -80,10 +80,12 @@ class StackGRUEncoder(StackGRU):
         return mu, logvar
 
     def _post_gru_reshape(self, hidden: torch.Tensor) -> torch.Tensor:
-        expected_shape = torch.tensor([
-            self.n_layers * self.n_directions, self.batch_size,
-            self.rnn_cell_size
-        ])
+        expected_shape = torch.tensor(
+            [
+                self.n_layers * self.n_directions, self.batch_size,
+                self.rnn_cell_size
+            ]
+        )
         if not torch.equal(torch.tensor(hidden.shape), expected_shape):
             raise ValueError(
                 f'GRU hidden layer has incorrect shape: {hidden.shape}. '

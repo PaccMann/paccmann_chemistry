@@ -116,8 +116,8 @@ class StackGRU(nn.Module):
             Stack of size `[batch_size, stack_depth, stack_width]`.
         """
         if input_token.shape[0] != 1 or len(input_token.shape) < 2:
-            # It may receive a single token as input so the fist element is 1
-            # but actially corresponding to batch size. In that case we also
+            # It may receive a single token as input so the first element is 1
+            # but actually corresponding to batch size. In that case we also
             # resize.
             input_token = input_token.view(1, -1)
         embedded_input = self.encoder(input_token.to(self.device))
@@ -134,10 +134,8 @@ class StackGRU(nn.Module):
 
     def _stack_update(self, embedded_input, hidden, stack):
         """Pre-gru stack update operations"""
-        stack_controls = self.stack_controls_layer(
-            hidden[-1, :, :].unsqueeze(0)
-        )
-        stack_controls = F.softmax(stack_controls, dim=1)
+        stack_controls = self.stack_controls_layer(hidden[-1, :, :])
+        stack_controls = F.softmax(stack_controls, dim=-1)
         stack_input = self.stack_input_layer(hidden[-1, :, :].unsqueeze(0))
         stack_input = torch.tanh(stack_input)
         stack = self.stack_augmentation(
