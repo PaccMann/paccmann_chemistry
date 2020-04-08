@@ -2,9 +2,8 @@ import unittest
 import numpy as np
 import torch
 
-from paccmann_chemistry.models.vae import \
-    StackGRUEncoder, StackGRUDecoder, TeacherVAE
-from paccmann_chemistry.models.training import sequential_data_preparation
+from paccmann_chemistry.models.vae import StackGRUEncoder
+
 # pylint: disable=not-callable, no-member
 
 
@@ -87,14 +86,15 @@ class TestStackGRUEncoder(unittest.TestCase):
 
         params = self.default_params
         params['batch_size'] = 128
-        params['input_size'] = 50
+        params['input_size'] = 55
 
         device = torch.device('cpu')
 
         gru_encoder = StackGRUEncoder(params).to(device)
         state_dict = gru_encoder.state_dict()
 
-        sample = torch.tensor(np.arange(50))
+        # 2 (start index) + random token sequence
+        sample = np.concatenate([[2], np.arange(3, 53)])
 
         def _get_sample_at_batch_size(batch_size):
             """Helper function to iterate over the batches"""
@@ -102,12 +102,13 @@ class TestStackGRUEncoder(unittest.TestCase):
             gru_encoder = StackGRUEncoder(params).to(device)
             gru_encoder.load_state_dict(state_dict)
             gru_encoder = gru_encoder.eval()
-            batch = [sample for _ in range(params['batch_size'])]
-            padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
-            padded_batch = padded_batch.to(device)
-            encoder_seq, _, _ = sequential_data_preparation(
-                padded_batch, input_keep=1, start_index=2, end_index=49
+
+            # Setup a batch to be passed into the encoder. This is the same
+            # that `training.sequential_data_preparation` does
+            batch = np.stack(
+                [sample for _ in range(params['batch_size'])], axis=1
             )
+            encoder_seq = torch.tensor(batch).long()
             return gru_encoder.encoder_train_step(encoder_seq)[0][0]
 
         batch_sizes = [1, 2, 4, 12, 55, 128]
