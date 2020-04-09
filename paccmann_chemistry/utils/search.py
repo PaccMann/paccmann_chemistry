@@ -115,8 +115,9 @@ class BeamSearch(Search):
                 logits. (batch_size, length, vocabulary_size)
         Returns:
             tuple: a tuple containing:
-            - the token indexes selected per beam. (batch_size, length, top_k)
-            - the score. (top_k)
+            - the token indexes for each top sequence.
+                (batch_size, length, top_k)
+            - the scores. (batch_size, top_k)
         """
         tokens, scores = zip(*[
             self._beam_per_sequence(sequence)
