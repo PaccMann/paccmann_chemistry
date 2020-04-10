@@ -55,15 +55,17 @@ class StackGRU(nn.Module):
         self.batch_size = params['batch_size']
         self.use_cuda = torch.cuda.is_available()
         self.n_layers = params['n_layers']
-        self.use_stack = params.get('use_stack', True)  # Used only for testing
+
         self.bidirectional = params.get('bidirectional', False)
         self.n_directions = 2 if self.bidirectional else 1
         self.device = get_device()
 
         self.gru_input = self.embedding_size
+        self.use_stack = params.get('use_stack', True)
         if self.use_stack:
             self.gru_input += self.stack_width
-
+        else:
+            warnings.warn('Attention: No stack will be used')
         # Network
         self.stack_controls_layer = nn.Linear(
             in_features=self.rnn_cell_size, out_features=3
@@ -72,7 +74,7 @@ class StackGRU(nn.Module):
             in_features=self.rnn_cell_size, out_features=self.stack_width
         )
 
-        self.encoder = nn.Embedding(
+        self.embedding = nn.Embedding(
             self.vocab_size,
             self.embedding_size,
             padding_idx=params.get('pad_index', 0)
@@ -84,7 +86,7 @@ class StackGRU(nn.Module):
             bidirectional=self.bidirectional,
             dropout=params['dropout']
         )
-        self.decoder = nn.Linear(
+        self.output_layer = nn.Linear(
             self.rnn_cell_size * self.n_directions, self.vocab_size
         )
         self.criterion = nn.CrossEntropyLoss()
@@ -118,16 +120,15 @@ class StackGRU(nn.Module):
             # but actually corresponding to batch size. In that case we also
             # resize.
             input_token = input_token.view(1, -1)
-        embedded_input = self.encoder(input_token.to(self.device))
+        embedded_input = self.embedding(input_token.to(self.device))
 
         if self.use_stack:
             inp, stack = self._stack_update(embedded_input, hidden, stack)
         else:
-            # NOTE: At the moment, this is here for just purely testing reasons
             inp = embedded_input
 
         output, hidden = self.gru(inp, hidden)
-        output = self.decoder(output).squeeze()
+        output = self.output_layer(output).squeeze()
         return output, hidden, stack
 
     def _stack_update(self, embedded_input, hidden, stack):
