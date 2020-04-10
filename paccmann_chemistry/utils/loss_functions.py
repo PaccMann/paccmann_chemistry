@@ -5,8 +5,13 @@ from . import kl_weight
 
 
 def vae_loss_function(
-    decoder_loss, mu, logvar, kl_growth=0.0015, step=None, eval_mode=False
-):
+    decoder_loss: torch.Tensor,
+    mu: torch.Tensor,
+    logvar: torch.Tensor,
+    kl_growth: float = 0.0015,
+    step: int = None,
+    eval_mode: bool = False
+) -> (torch.Tensor, torch.Tensor):
     """
     Loss Function for VAE.
 
@@ -17,7 +22,7 @@ def vae_loss_function(
     Args:
         decoder_loss (torch.Tensor): Reconstruction cross-entropy loss over the
             entire sequence of the input.
-        mu (torch.Tensor): He latent mean, mu.
+        mu (torch.Tensor): The latent mean, mu.
         logvar (torch.Tensor): Log of the latent variance.
         kl_growth (float): The rate at which the weight grows. Defaults to
             0.0015 resulting in a weight of 1 around step=9000.

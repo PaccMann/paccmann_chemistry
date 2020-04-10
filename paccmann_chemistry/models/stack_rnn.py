@@ -27,10 +27,9 @@ class StackGRU(nn.Module):
             params (dict): Hyperparameters.
 
         Items in params:
-            input_size (int): Vocabulary size.
             embedding_size (int): The embedding size for the dict tokens
             rnn_cell_size (int): Hidden size of GRU.
-            output_size (int): Output size of GRU (vocab size).
+            vocab_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
             n_layers (int): The number of GRU layer.
@@ -48,16 +47,15 @@ class StackGRU(nn.Module):
 
         super(StackGRU, self).__init__()
 
-        self.input_size = params['input_size']
         self.embedding_size = params['embedding_size']
         self.rnn_cell_size = params['rnn_cell_size']
-        self.output_size = params['output_size']
+        self.vocab_size = params['vocab_size']
         self.stack_width = params['stack_width']
         self.stack_depth = params['stack_depth']
         self.batch_size = params['batch_size']
         self.use_cuda = torch.cuda.is_available()
         self.n_layers = params['n_layers']
-        self.use_stack = params.get('use_stack', True)  # Used for testing rn
+        self.use_stack = params.get('use_stack', True)  # Used only for testing
         self.bidirectional = params.get('bidirectional', False)
         self.n_directions = 2 if self.bidirectional else 1
         self.device = get_device()
@@ -75,7 +73,7 @@ class StackGRU(nn.Module):
         )
 
         self.encoder = nn.Embedding(
-            self.input_size,
+            self.vocab_size,
             self.embedding_size,
             padding_idx=params.get('pad_index', 0)
         )
@@ -87,7 +85,7 @@ class StackGRU(nn.Module):
             dropout=params['dropout']
         )
         self.decoder = nn.Linear(
-            self.rnn_cell_size * self.n_directions, self.output_size
+            self.rnn_cell_size * self.n_directions, self.vocab_size
         )
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = OPTIMIZER_FACTORY[
@@ -111,7 +109,7 @@ class StackGRU(nn.Module):
         Returns:
             (torch.Tensor, torch.Tensor, torch.Tensor): output, hidden, stack.
 
-            Output of size `[batch_size, output_size]`.
+            Output of size `[batch_size, vocab_size]`.
             Hidden state of size `[1, batch_size, rnn_cell_size]`.
             Stack of size `[batch_size, stack_depth, stack_width]`.
         """

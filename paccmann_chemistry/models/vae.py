@@ -20,9 +20,8 @@ class StackGRUEncoder(StackGRU):
 
         Items in params:
             latent_dim (int): Size of latent mean and variance.
-            input_size (int): Vocabulary size.
             rnn_cell_size (int): Hidden size of GRU.
-            output_size (int): Output size of GRU (vocab size).
+            vocab_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
             n_layers (int): The number of GRU layer.
@@ -123,9 +122,8 @@ class StackGRUDecoder(StackGRU):
 
         Items in params:
             latent_dim (int): Size of latent mean and variance.
-            input_size (int): Vocabulary size.
             rnn_cell_size (int): Hidden size of GRU.
-            output_size (int): Output size of GRU (vocab size).
+            vocab_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
             n_layers (int): The number of GRU layer.
@@ -240,6 +238,7 @@ class StackGRUDecoder(StackGRU):
                 top_idx = top_idx.unsqueeze(1).unsqueeze(2)
 
             elif self.params.get('decoding_search', 'sampling') == 'sampling':
+                # TODO: Adjust this to using a softmax
                 # Sample from the network as a multinomial distribution
                 output_dist = output.data.cpu().view(batch_size, -1).div(
                     temperature
@@ -430,6 +429,7 @@ class TeacherVAE(nn.Module):
 
         return molecule_iter
 
+    # NOTE: Deprecated. Should be refactored to 'save' and 'load'.
     def save_model(self, path, *args, **kwargs):
         """Save model to path."""
         torch.save(self.state_dict(), path, *args, **kwargs)

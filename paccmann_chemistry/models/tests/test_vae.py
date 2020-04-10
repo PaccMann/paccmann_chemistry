@@ -12,10 +12,9 @@ class TestStackGRUEncoder(unittest.TestCase):
 
     default_params = {
         'latent_dim': 128,
-        'input_size': 12,
         'rnn_cell_size': 30,
         'embedding_size': 80,
-        'output_size': 100,
+        'vocab_size': 100,
         'stack_width': 50,
         'stack_depth': 51,
         'n_layers': 3,
@@ -93,7 +92,7 @@ class TestStackGRUEncoder(unittest.TestCase):
 
         params = self.default_params
         params['batch_size'] = 128
-        params['input_size'] = 55
+        params['vocab_size'] = 55
         params['use_stack'] = use_stack
 
         device = torch.device('cpu')
