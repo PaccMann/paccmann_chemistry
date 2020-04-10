@@ -170,7 +170,7 @@ def train_vae(
             save_dir = os.path.join(
                 model_dir, f'weights/saved_model_epoch_{epoch}_iter_{_iter}.pt'
             )
-            vae_model.save_model(save_dir)
+            vae_model.save(save_dir)
             logger.info(f'***SAVING***\t Epoch {epoch}, saved model.')
         if _iter and _iter % eval_interval == 0:
             latent_z = torch.randn(
@@ -214,7 +214,7 @@ def train_vae(
                         'ep_loss': epoch
                     }
                 )
-                vae_model.save_model(
+                vae_model.save(
                     os.path.join(model_dir, f'weights/best_loss.pt')
                 )
                 logger.info(
@@ -224,9 +224,7 @@ def train_vae(
 
             if test_rec < loss_tracker['test_rec_a']:
                 loss_tracker.update({'test_rec_a': test_rec, 'ep_rec': epoch})
-                vae_model.save_model(
-                    os.path.join(model_dir, f'weights/best_rec.pt')
-                )
+                vae_model.save(os.path.join(model_dir, f'weights/best_rec.pt'))
                 logger.info(
                     f'Epoch {epoch}. NEW best reconstruction loss = '
                     f'{test_rec:.4f} \t (Loss = {test_loss:.4f}, KLD = '
@@ -234,9 +232,7 @@ def train_vae(
                 )
             if test_kld < loss_tracker['test_kld_a']:
                 loss_tracker.update({'test_kld_a': test_kld, 'ep_kld': epoch})
-                vae_model.save_model(
-                    os.path.join(model_dir, f'weights/best_kld.pt')
-                )
+                vae_model.save(os.path.join(model_dir, f'weights/best_kld.pt'))
                 logger.info(
                     f'Epoch {epoch}. NEW best KLD = {test_kld:.4f} \t (loss '
                     f'= {test_loss:.4f}, Reconstruction = {test_rec:.4f}).'

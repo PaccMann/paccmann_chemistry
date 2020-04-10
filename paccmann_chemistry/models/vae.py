@@ -429,12 +429,11 @@ class TeacherVAE(nn.Module):
 
         return molecule_iter
 
-    # NOTE: Deprecated. Should be refactored to 'save' and 'load'.
-    def save_model(self, path, *args, **kwargs):
+    def save(self, path, *args, **kwargs):
         """Save model to path."""
         torch.save(self.state_dict(), path, *args, **kwargs)
 
-    def load_model(self, path, *args, **kwargs):
+    def load(self, path, *args, **kwargs):
         """Load model from path."""
         weights = torch.load(path, *args, **kwargs)
         self.load_state_dict(weights)
