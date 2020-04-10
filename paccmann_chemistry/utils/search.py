@@ -34,9 +34,15 @@ class GreedySearch(Search):
         """
         return torch.argmax(logits, 2)
 
+        # TODO: Implement forward step (for all 3)
+
 
 class SamplingSearch(Search):
     """"Sampling search."""
+
+    def __init(self):
+        ## TODO temperature
+        pass
 
     def forward(self, logits: torch.Tensor) -> torch.Tensor:
         """
@@ -49,10 +55,12 @@ class SamplingSearch(Search):
             torch.Tensor: the token indexes selected. (batch_size, length)
         """
         probabilities = torch.softmax(logits, 2)
-        return torch.stack([
-            torch.multinomial(probability, 1)
-            for probability in probabilities
-        ]).squeeze()
+        return torch.stack(
+            [
+                torch.multinomial(probability, 1)
+                for probability in probabilities
+            ]
+        ).squeeze()
 
 
 class BeamSearch(Search):
@@ -119,11 +127,7 @@ class BeamSearch(Search):
                 (batch_size, length, top_k)
             - the scores. (batch_size, top_k)
         """
-        tokens, scores = zip(*[
-            self._beam_per_sequence(sequence)
-            for sequence in logits
-        ])
-        return (
-            torch.stack(tokens),
-            torch.stack(scores)
+        tokens, scores = zip(
+            *[self._beam_per_sequence(sequence) for sequence in logits]
         )
+        return (torch.stack(tokens), torch.stack(scores))
