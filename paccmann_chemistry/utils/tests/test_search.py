@@ -4,9 +4,9 @@ from paccmann_chemistry.utils.search import (
     GreedySearch, SamplingSearch, BeamSearch
 )
 
-LOGITS = torch.tensor([
-    [[0.1, 0.2, 0.3, 0.4, 0.5], [0.5, 0.4, 0.3, 0.2, 0.1]] * 5
-]*2)
+LOGITS = torch.tensor(
+    [[[0.1, 0.2, 0.3, 0.4, 0.5], [0.5, 0.4, 0.3, 0.2, 0.1]] * 5] * 2
+)
 
 
 class TestGreedySearch(unittest.TestCase):
@@ -17,19 +17,17 @@ class TestGreedySearch(unittest.TestCase):
         search = GreedySearch()
         tokens = search(LOGITS)
         self.assertListEqual(
-            tokens.numpy().tolist(), [[4, 0]*LOGITS.shape[2]]*LOGITS.shape[0]
+            tokens.numpy().tolist(),
+            [[4, 0] * LOGITS.shape[2]] * LOGITS.shape[0]
         )
 
     def test_step(self) -> None:
         """Test step-wise sampling search."""
         search = GreedySearch()
-        groundtruth_tokens = [4, 0]*LOGITS.shape[2]
+        groundtruth_tokens = [4, 0] * LOGITS.shape[2]
         for logits, token in zip(LOGITS.permute(1, 0, 2), groundtruth_tokens):
             tokens = search.step(logits)
-            self.assertListEqual(
-                list(tokens),
-                list([token]*LOGITS.shape[0])
-            )
+            self.assertListEqual(list(tokens), list([token] * LOGITS.shape[0]))
 
 
 class TestSamplingSearch(unittest.TestCase):
@@ -39,10 +37,7 @@ class TestSamplingSearch(unittest.TestCase):
         """Test sampling search."""
         search = SamplingSearch()
         tokens = search(LOGITS)
-        self.assertListEqual(
-            list(tokens.shape),
-            list(LOGITS.shape[:2])
-        )
+        self.assertListEqual(list(tokens.shape), list(LOGITS.shape[:2]))
 
     def test_step(self) -> None:
         """Test step-wise sampling search."""
@@ -50,8 +45,7 @@ class TestSamplingSearch(unittest.TestCase):
         for logits in LOGITS.permute(1, 0, 2):
             tokens = search.step(logits)
             self.assertListEqual(
-                list(tokens.shape),
-                list([LOGITS.shape[0], 1])
+                list(tokens.shape), list([LOGITS.shape[0], 1])
             )
 
 
@@ -63,46 +57,50 @@ class TestBeamSearch(unittest.TestCase):
         search = BeamSearch()
         tokens, _ = search(LOGITS)
         self.assertListEqual(
-            tokens.numpy().tolist(),
-            [[
-                [4, 4, 4],
-                [0, 0, 0],
-                [4, 4, 4],
-                [0, 0, 0],
-                [4, 4, 4],
-                [0, 0, 0],
-                [4, 4, 4],
-                [0, 0, 0],
-                [4, 4, 3],
-                [0, 1, 0]
-            ]]*LOGITS.shape[0]
+            tokens.numpy().tolist(), [
+                [
+                    [4, 4, 4], [0, 0, 0], [4, 4, 4], [0, 0, 0], [4, 4, 4],
+                    [0, 0, 0], [4, 4, 4], [0, 0, 0], [4, 4, 3], [0, 1, 0]
+                ]
+            ] * LOGITS.shape[0]
+        )
+        # Test temperature
+        search = BeamSearch(temperature=0.001)
+        tokens, scores = search(LOGITS)
+        self.assertListEqual(
+            tokens.numpy().tolist(), [
+                [
+                    [4, 4, 4], [0, 0, 0], [4, 4, 4], [0, 0, 0], [4, 4, 4],
+                    [0, 0, 0], [4, 4, 4], [0, 0, 0], [4, 4, 4], [0, 1, 2]
+                ]
+            ] * LOGITS.shape[0]
+        )
+        search = BeamSearch(temperature=3.)
+        tokens, scores = search(LOGITS)
+        self.assertListEqual(
+            tokens.numpy().tolist(), [
+                [
+                    [4, 4, 4], [0, 0, 0], [4, 4, 4], [0, 0, 0], [4, 4, 4],
+                    [0, 0, 0], [4, 4, 4], [0, 0, 1], [4, 4, 4], [0, 1, 0]
+                ]
+            ] * LOGITS.shape[0]
         )
 
     def test_step(self) -> None:
         """Test step-wise beam search."""
         search = BeamSearch()
         # intialize beams for all the elements in the batch
-        beams = [[[list(), 0.0]]]*LOGITS.shape[0]
+        beams = [[[list(), 0.0]]] * LOGITS.shape[0]
         for logits in LOGITS.permute(1, 0, 2):
             tokens, beams = search.step(logits, beams)
         self.assertListEqual(
             [
-                list(map(
-                    list,
-                    zip(*[beam[0] for beam in sample_beams])
-                ))
+                list(map(list, zip(*[beam[0] for beam in sample_beams])))
                 for sample_beams in beams
-            ],
-            [[
-                [4, 4, 4],
-                [0, 0, 0],
-                [4, 4, 4],
-                [0, 0, 0],
-                [4, 4, 4],
-                [0, 0, 0],
-                [4, 4, 4],
-                [0, 0, 0],
-                [4, 4, 3],
-                [0, 1, 0]
-            ]]*LOGITS.shape[0]
+            ], [
+                [
+                    [4, 4, 4], [0, 0, 0], [4, 4, 4], [0, 0, 0], [4, 4, 4],
+                    [0, 0, 0], [4, 4, 4], [0, 0, 0], [4, 4, 3], [0, 1, 0]
+                ]
+            ] * LOGITS.shape[0]
         )
