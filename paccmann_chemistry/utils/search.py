@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from math import log
 from sys import float_info
+import numpy as np
 
 
 class Search(nn.Module):
@@ -134,7 +135,9 @@ class SamplingSearch(Search):
 class BeamSearch(Search):
     """Beam search."""
 
-    def __init__(self, top_k: int = 3, temperature: float = 1.0):
+    def __init__(
+        self, top_k: int = 3, temperature: float = 1.0, top_tokens: int = 5
+    ):
         """
         Initialize the beam search.
 
@@ -142,10 +145,13 @@ class BeamSearch(Search):
             top_k (int, optional): top sequences returned. Defaults to 3.
             temperature (float, optional): temperature parameter. Defaults to
                 1.0, a.k.a., no temperature.
+            top_tokens (int, optional): number of top dictionary tokens kept
+                for the search, defaults to 5.
         """
         super().__init__()
         self.top_k = top_k
         self.temperature = temperature
+        self.top_tokens = top_tokens
 
     def _beam_step_per_sequence(
         self, probability: torch.Tensor, beams: list
@@ -165,10 +171,12 @@ class BeamSearch(Search):
         # expand each current candidate
         for i in range(len(beams)):
             a_sequence, score = beams[i]
-            for j in range(len(probability)):
+            # Sort the probabilities over dict and select indices of top n
+            top_token_indexes = np.argsort(-probability)[:self.top_tokens]
+            for top_token in top_token_indexes:
                 candidate = [
-                    a_sequence + [j],
-                    score + log(probability[j] + float_info.epsilon)
+                    a_sequence + [top_token],
+                    score + log(probability[top_token] + float_info.epsilon)
                 ]
                 all_candidates.append(candidate)
         # order all candidates by score
@@ -234,7 +242,6 @@ class BeamSearch(Search):
         """
         super().step(logits)
         probabilities = torch.softmax(logits.div(self.temperature), 1)
-        # print(beams, "\n")
         updated_beams = [
             self._beam_step_per_sequence(sample_probability, sample_beams)
             for sample_probability, sample_beams in zip(probabilities, beams)

@@ -86,6 +86,18 @@ class TestBeamSearch(unittest.TestCase):
             ] * LOGITS.shape[0]
         )
 
+        # Test top_tokens
+        search = BeamSearch(top_tokens=2)
+        tokens, scores = search(LOGITS)
+        self.assertListEqual(
+            tokens.numpy().tolist(), [
+                [
+                    [4, 4, 4], [0, 0, 0], [4, 4, 4], [0, 0, 0], [4, 4, 4],
+                    [0, 0, 0], [4, 4, 4], [0, 0, 0], [4, 4, 3], [0, 1, 0]
+                ]
+            ] * LOGITS.shape[0]
+        )
+
     def test_step(self) -> None:
         """Test step-wise beam search."""
         search = BeamSearch()
