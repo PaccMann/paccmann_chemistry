@@ -6,6 +6,7 @@ import torch.nn as nn
 
 from .stack_rnn import StackGRU
 from ..utils import get_device
+from ..utils.search import GreedySearch, BeamSearch, SamplingSearch
 
 
 class StackGRUEncoder(StackGRU):
@@ -147,6 +148,26 @@ class StackGRUDecoder(StackGRU):
             in_features=self.latent_dim, out_features=self.rnn_cell_size
         )
 
+        # Select search type
+        self.search_type = params.get('decoding_search', 'sampling')
+        if self.search_type == 'greedy':
+            self.search = GreedySearch()
+        elif self.search_type == 'sampling':
+            self.search = SamplingSearch(
+                temperature=params.get('temperature', 1.)
+            )
+        elif self.search_type == 'beam':
+            self.search = BeamSearch(
+                temperature=params.get('temperature', 1.),
+                top_tokens=params.get('top_tokens', 5),
+                beam_width=params.get('beam_width', 3)
+            )
+        else:
+            raise ValueError(
+                f'Unknown decoder_search type: {self.search_type}. Choose '
+                "from {'greedy', 'sampling', 'beam'}."
+            )
+
     def decoder_train_step(self, latent_z, input_seq, target_seq):
         """
         The Decoder Train Step.
@@ -195,12 +216,8 @@ class StackGRUDecoder(StackGRU):
             latent_z (torch.Tensor): The sampled latent representation
                 of size `[1, batch_size, latent_dim]`.
             prime_input (torch.Tensor): Tensor of indices for the priming
-                string. Must be of size [1, prime_input length] or
-                [prime_input length].
-                Example:
-                    `prime_input = torch.tensor([2, 4, 5]).view(1, -1)`
-                    or
-                    `prime_input = torch.tensor([2, 4, 5])`
+                string. Must be of size [prime_input length].
+                Example: `prime_input = torch.tensor([2, 4, 5])`
             end_token (torch.Tensor): End token for the generated molecule
                 of shape [1].
                 Example: `end_token = torch.LongTensor([3])`
@@ -219,47 +236,33 @@ class StackGRUDecoder(StackGRU):
         n_layers = self.n_layers
         n_directions = self.n_directions
         latent_z = latent_z.repeat(n_layers * n_directions, 1, 1)
-        # TODO: Is this a common thing to do?
         hidden = self.latent_to_hidden(latent_z)
         batch_size = hidden.shape[1]
+        beams = [[[list(), 0.0]]] * batch_size
         stack = self.init_stack(batch_size)
-        prime_input = prime_input.repeat(batch_size, 1)
-        prime_input = prime_input.transpose(1, 0).view(-1, 1, len(prime_input))
-        generated_seq = prime_input.transpose(0, 2)
+        generated_seq = prime_input.repeat(batch_size, 1)
+        prime_input = generated_seq.transpose(1, 0)
 
         # Use priming string to "build up" hidden state
+
         for prime_entry in prime_input[:-1]:
             _, hidden, stack = self(prime_entry, hidden, stack)
-        input_token = prime_input[-1].to(get_device())
+        input_token = prime_input[-1]
 
         for _ in range(generate_len):
             output, hidden, stack = self(input_token, hidden, stack)
 
-            if self.params.get('decoding_search', 'sampling') == 'argmax':
-                _, top_idx = torch.max(output, 1)
-                top_idx = top_idx.unsqueeze(1).unsqueeze(2)
-
-            elif self.params.get('decoding_search', 'sampling') == 'sampling':
-                # Sample from the network as a multinomial distribution
-                output_dist = output.data.cpu().view(batch_size, -1).div(
-                    temperature
-                ).exp().double()    # yapf: disable
-                top_idx = torch.tensor(
-                    torch.multinomial(output_dist, 1).cpu().numpy()
-                ).unsqueeze(2)
-            elif self.params.get(
-                'decoding_search', 'sampling'
-            ) == 'beam_search':
-                # TODO
-                raise ValueError('Beam Search not yet implemented.')
+            if self.search_type != 'beam':
+                top_idx = self.search.step(output)
+            else:
+                top_idx, beams = self.search.step(*[output, beams])
+                # Discard all but top 1 token to build up hidden state
+                top_idx = top_idx[:, 0].unsqueeze(1)
 
             # Add generated_seq character to string and use as next input
-            generated_seq = torch.cat(
-                (generated_seq, top_idx),
-                dim=2
-            )   # yapf: disable
+            generated_seq = torch.cat((generated_seq, top_idx), dim=1)
             input_token = top_idx.view(1, -1)
-            # break when end token is generated
+            # If we don't generate in batches, we can do early stopping.
             if batch_size == 1 and top_idx == end_token:
                 break
         return generated_seq
@@ -421,7 +424,7 @@ class TeacherVAE(nn.Module):
         )
 
         molecule_gen = (
-            takewhile(lambda x: x != end_token, molecule.squeeze()[1:])
+            takewhile(lambda x: x != end_token, molecule[1:])
             for molecule in generated_batch
         )   # yapf: disable
 

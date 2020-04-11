@@ -173,11 +173,7 @@ def train_vae(
             vae_model.save_model(save_dir)
             logger.info(f'***SAVING***\t Epoch {epoch}, saved model.')
         if _iter and _iter % eval_interval == 0:
-            latent_z = torch.randn(
-                1,
-                mu.shape[0],  # batch_size
-                mu.shape[1]  # latent size
-            ).to(device)
+            latent_z = torch.randn(1, mu.shape[0], mu.shape[1]).to(device)
             molecule_iter = vae_model.generate(
                 latent_z,
                 prime_input=torch.tensor([2]),

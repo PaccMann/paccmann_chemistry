@@ -102,7 +102,8 @@ class StackGRU(nn.Module):
 
         Args:
             input_token (torch.Tensor): LongTensor containing
-                indices of the input token of size `[1, batch_size]`.
+                indices of the input token of size `batch_size` or
+                `[1, batch_size]`.
             hidden (torch.Tensor): Hidden state of size
                 `[n_layers*n_directions, batch_size, rnn_cell_size]`.
             stack (torch.Tensor): Previous step's stack of size

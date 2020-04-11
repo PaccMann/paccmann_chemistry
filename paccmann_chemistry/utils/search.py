@@ -73,10 +73,10 @@ class GreedySearch(Search):
             logits (torch.Tensor): the model's
                 logits. (batch_size, vocabulary_size)
         Returns:
-            torch.Tensor: the token indexes for all the batch. (batch_size).
+            torch.Tensor: the token indexes for all the batch. (batch_size, 1).
         """
         super().step(logits)
-        return torch.argmax(logits, 1)
+        return torch.argmax(logits, 1, keepdim=True)
 
 
 class SamplingSearch(Search):
@@ -120,7 +120,7 @@ class SamplingSearch(Search):
             logits (torch.Tensor): the model's
                 logits. (batch_size, vocabulary_size)
         Returns:
-            torch.Tensor: the token indexes for all the batch. (batch_size).
+            torch.Tensor: the token indexes for all the batch. (batch_size, 1).
         """
         super().step(logits)
         probabilities = torch.softmax(logits.div(self.temperature), 1)
@@ -244,7 +244,7 @@ class BeamSearch(Search):
             - updated beams for all the batch.
         """
         super().step(logits)
-        probabilities = torch.softmax(logits.div(self.temperature), 1)
+        probabilities = torch.softmax(logits.detach().div(self.temperature), 1)
         updated_beams = [
             self._beam_step_per_sequence(sample_probability, sample_beams)
             for sample_probability, sample_beams in zip(probabilities, beams)
