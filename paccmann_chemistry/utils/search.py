@@ -136,20 +136,23 @@ class BeamSearch(Search):
     """Beam search."""
 
     def __init__(
-        self, top_k: int = 3, temperature: float = 1.0, top_tokens: int = 5
+        self,
+        beam_width: int = 3,
+        temperature: float = 1.0,
+        top_tokens: int = 5
     ):
         """
         Initialize the beam search.
 
         Args:
-            top_k (int, optional): top sequences returned. Defaults to 3.
+            beam_width (int, optional): top sequences returned. Defaults to 3.
             temperature (float, optional): temperature parameter. Defaults to
                 1.0, a.k.a., no temperature.
             top_tokens (int, optional): number of top dictionary tokens kept
                 for the search, defaults to 5.
         """
         super().__init__()
-        self.top_k = top_k
+        self.beam_width = beam_width
         self.temperature = temperature
         self.top_tokens = top_tokens
 
@@ -184,7 +187,7 @@ class BeamSearch(Search):
             all_candidates, key=lambda pair: pair[1], reverse=True
         )
         # select k best
-        return ordered[:self.top_k]
+        return ordered[:self.beam_width]
 
     def _beam_per_sequence(self, logits: torch.Tensor) -> tuple:
         """
@@ -196,8 +199,8 @@ class BeamSearch(Search):
 
         Returns:
             tuple: a tuple containing:
-            - a tensor with tokens. (length, top_k)
-            - score. (top_k)
+            - a tensor with tokens. (length, beam_width)
+            - score. (beam_width)
         """
         beams = [[list(), 0.0]]
         probabilities = torch.softmax(logits.div(self.temperature), 1)
@@ -209,7 +212,7 @@ class BeamSearch(Search):
 
     def forward(self, logits: torch.Tensor) -> tuple:
         """
-        Perform the beam search.
+        Perform the beam search for a non-autoregressive generator.
 
         Args:
             logits (torch.Tensor): the model's
@@ -217,8 +220,8 @@ class BeamSearch(Search):
         Returns:
             tuple: a tuple containing:
             - the token indexes for each top sequence.
-                (batch_size, length, top_k)
-            - scores. (batch_size, top_k)
+                (batch_size, length, beam_width)
+            - scores. (batch_size, beam_width)
         """
         super().forward(logits)
         tokens, scores = zip(
@@ -228,7 +231,7 @@ class BeamSearch(Search):
 
     def step(self, logits: torch.Tensor, beams: list) -> tuple:
         """
-        Perform a beam search step.
+        Perform a single beam search step for an autoregressive model.
 
         Args:
             logits (torch.Tensor): the model's
@@ -237,7 +240,7 @@ class BeamSearch(Search):
         Returns:
             tuple: a tuple containing:
             - the token indexes for all the batch.
-                (batch_size, top_k)
+                (batch_size, beam_width)
             - updated beams for all the batch.
         """
         super().step(logits)
