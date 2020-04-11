@@ -245,53 +245,6 @@ class StackGRU(nn.Module):
 
         return loss.item() / len(input_seq)
 
-    def generate(
-        self, prime_input, end_token, generate_len=100, temperature=0.8
-    ):
-        """
-        The evaluation method.
-
-        Args:
-            prime_input (torch.tensor): Indices for the priming string of size
-                `[batch_size, length of priming sequences]`.
-                Example: `prime_input = torch.tensor([[2, 4, 5], [2, 4, 7]])`
-            end_token (torch.tensor): End token for the generated molecule.
-            generate_len (int): Length of the generated molecule.
-            temperature (float): Softmax temperature parameter between 0 and 1.
-                Lower temperatures result in a more descriminative softmax.
-
-        Returns:
-            The sequence of indices for the generated molecule.
-        """
-        prime_input = prime_input.transpose(1, 0).view(-1, 1, len(prime_input))
-        batch_size = prime_input.shape[-1]
-        hidden = self.init_hidden(batch_size)
-        stack = self.init_stack(batch_size)
-        generated_seq = prime_input.transpose(0, 2)
-        # Use priming string to "build up" hidden state
-        for prime_entry in prime_input[:-1]:
-            _, hidden, stack = self(prime_entry, hidden, stack)
-        input_token = prime_input[-1]
-
-        for _ in range(generate_len):
-            output, hidden, stack = self(input_token, hidden, stack)
-
-            # Sample from the network as a multinomial distribution
-            output_dist = output.data.cpu().view(batch_size,
-                                                 -1).div(temperature).exp()
-            top_idx = torch.tensor(
-                torch.multinomial(output_dist, 1).cpu().numpy()
-            )
-            # Add generated_seq character to string and use as next input
-            generated_seq = torch.cat(
-                (generated_seq, top_idx.unsqueeze(2)), dim=2
-            )
-            input_token = top_idx.view(1, -1)
-            # break when end token is generated
-            if batch_size == 1 and top_idx == end_token:
-                break
-        return generated_seq
-
     def _check_params(self):
         """
         Runs size checks on input parameter
