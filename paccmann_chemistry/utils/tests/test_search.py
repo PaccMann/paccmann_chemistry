@@ -104,6 +104,10 @@ class TestBeamSearch(unittest.TestCase):
         # intialize beams for all the elements in the batch
         beams = [[[list(), 0.0]]] * LOGITS.shape[0]
         for logits in LOGITS.permute(1, 0, 2):
+            logits = torch.stack(
+                [logits] +
+                [logits.clone() for _ in range(search.beam_width)]
+            )
             tokens, beams = search.step(logits, beams)
         self.assertListEqual(
             [

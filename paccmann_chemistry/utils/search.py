@@ -38,9 +38,9 @@ class Search(nn.Module):
         Returns:
             object: the search output.
         """
-        if not len(logits.shape) == 2:
+        if len(logits.shape) > 3:
             raise ValueError(
-                f'Logits need to be 3D Tensor, was: {logits.shape}'
+                f'Logits need to be 2D or 3D Tensor, was: {logits.shape}'
             )
         if not type(logits) == torch.Tensor:
             raise TypeError(
@@ -157,23 +157,24 @@ class BeamSearch(Search):
         self.top_tokens = top_tokens
 
     def _beam_step_per_sequence(
-        self, probability: torch.Tensor, beams: list
+        self, probabilities: torch.Tensor, beams: list
     ) -> list:
         """
         Perform a beam search step.
 
         Args:
-            probability (torch.Tensor): probability for the current step.
-                (vocabulary_size).
-            beams (list): beams containg sequence and score.
+            probabilities (torch.Tensor): probabilities for the current step.
+                (beam_width, vocabulary_size).
+            beams (list): beams containg sequence and score. Length is equal
+                to beam_width.
 
         Returns:
             list: updated beams.
         """
         all_candidates = list()
         # expand each current candidate
-        for i in range(len(beams)):
-            a_sequence, score = beams[i]
+        for probability, beam in zip(probabilities, beams):
+            a_sequence, score = beam
             # Sort the probabilities over dict and select indices of top n
             top_token_indexes = np.argsort(-probability)[:self.top_tokens]
             for top_token in top_token_indexes:
@@ -186,7 +187,7 @@ class BeamSearch(Search):
         ordered = sorted(
             all_candidates, key=lambda pair: pair[1], reverse=True
         )
-        # select k best
+        # select best
         return ordered[:self.beam_width]
 
     def _beam_per_sequence(self, logits: torch.Tensor) -> tuple:
@@ -206,7 +207,11 @@ class BeamSearch(Search):
         probabilities = torch.softmax(logits.div(self.temperature), 1)
         # walk over each step in sequence
         for probability in probabilities:
-            beams = self._beam_step_per_sequence(probability, beams)
+            probability_beams = torch.stack(
+                [probability] +
+                [probability.clone() for _ in range(self.beam_width)]
+            )
+            beams = self._beam_step_per_sequence(probability_beams, beams)
         sequences, scores = zip(*beams)
         return (torch.tensor(list(sequences)).T, torch.tensor(list(scores)))
 
@@ -235,19 +240,20 @@ class BeamSearch(Search):
 
         Args:
             logits (torch.Tensor): the model's
-                logits. (batch_size, vocabulary_size)
+                logits. (beam_width, batch_size, vocabulary_size)
             beams (list): beams for all the batch.
         Returns:
             tuple: a tuple containing:
             - the token indexes for all the batch.
-                (batch_size, beam_width)
+                (beam_width, batch_size)
             - updated beams for all the batch.
         """
         super().step(logits)
-        probabilities = torch.softmax(logits.detach().div(self.temperature), 1)
+        probabilities = torch.softmax(logits.div(self.temperature), 2)
         updated_beams = [
             self._beam_step_per_sequence(sample_probability, sample_beams)
-            for sample_probability, sample_beams in zip(probabilities, beams)
+            for sample_probability, sample_beams in
+            zip(probabilities.permute(1, 0, 2), beams)
         ]
         token_beams = torch.stack(
             [
@@ -255,5 +261,5 @@ class BeamSearch(Search):
                 torch.tensor([beam[0][-1] for beam in sample_beams])
                 for sample_beams in updated_beams
             ]
-        )
+        ).permute(1, 0)
         return (token_beams, updated_beams)
