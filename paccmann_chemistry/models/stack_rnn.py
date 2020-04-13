@@ -41,8 +41,6 @@ class StackGRU(nn.Module):
                 Defaults to 'Adadelta'.
             padding_index (int, optional): Index of the padding token.
                 Defaults to 0.
-            bidirectional (bool, optional): Whether to train a bidirectional
-                GRU. Defaults to False.
         """
 
         super(StackGRU, self).__init__()
@@ -56,8 +54,6 @@ class StackGRU(nn.Module):
         self.use_cuda = torch.cuda.is_available()
         self.n_layers = params['n_layers']
 
-        self.bidirectional = params.get('bidirectional', False)
-        self.n_directions = 2 if self.bidirectional else 1
         self.device = get_device()
 
         self.gru_input = self.embedding_size
@@ -83,12 +79,10 @@ class StackGRU(nn.Module):
             self.gru_input,
             self.rnn_cell_size,
             self.n_layers,
-            bidirectional=self.bidirectional,
+            bidirectional=False,
             dropout=params['dropout']
         )
-        self.output_layer = nn.Linear(
-            self.rnn_cell_size * self.n_directions, self.vocab_size
-        )
+        self.output_layer = nn.Linear(self.rnn_cell_size, self.vocab_size)
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = OPTIMIZER_FACTORY[
             params.get('optimizer', 'Adadelta')
@@ -104,7 +98,7 @@ class StackGRU(nn.Module):
             input_token (torch.Tensor): LongTensor containing
                 indices of the input token of size `[1, batch_size]`.
             hidden (torch.Tensor): Hidden state of size
-                `[n_layers*n_directions, batch_size, rnn_cell_size]`.
+                `[n_layers, batch_size, rnn_cell_size]`.
             stack (torch.Tensor): Previous step's stack of size
                 `[batch_size, stack_depth, stack_width]`.
 
@@ -187,17 +181,11 @@ class StackGRU(nn.Module):
 
         if self.use_cuda:
             return Variable(
-                torch.zeros(
-                    self.n_layers * self.n_directions, batch_size,
-                    self.rnn_cell_size
-                ).cuda()
+                torch.zeros(self.n_layers, batch_size, self.rnn_cell_size)
             )
 
         return Variable(
-            torch.zeros(
-                self.n_layers * self.n_directions, batch_size,
-                self.rnn_cell_size
-            )
+            torch.zeros(self.n_layers, batch_size, self.rnn_cell_size)
         )
 
     def init_stack(self, batch_size=None):
