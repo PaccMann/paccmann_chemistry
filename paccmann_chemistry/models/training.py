@@ -4,7 +4,7 @@ import os
 from time import time
 
 import torch
-
+from ..utils.search import SamplingSearch
 from ..utils.hyperparams import OPTIMIZER_FACTORY
 from ..utils.loss_functions import vae_loss_function
 from ..utils import get_device, sequential_data_preparation
@@ -61,11 +61,10 @@ def test_vae(model, dataloader, logger, input_keep):
 
 def train_vae(
     epoch, model, train_dataloader, val_dataloader, smiles_language,
-    model_dir, optimizer='Adam', lr=1e-3, kl_growth=0.0015, input_keep=1.,
-    test_input_keep=0., start_index=2, end_index=3, generate_len=100,
-    temperature=0.8, log_interval=100, eval_interval=200,
-    save_interval=200, loss_tracker=None, train_logger=None, val_logger=None,
-    logger=None
+    model_dir, search=SamplingSearch(), optimizer='Adam', lr=1e-3,
+    kl_growth=0.0015, input_keep=1., test_input_keep=0., start_index=2,
+    end_index=3, generate_len=100, temperature=0.8, log_interval=100,
+    eval_interval=200, save_interval=200, loss_tracker=None, logger=None
 ):  # yapf: disable
     """
     VAE train function.
@@ -80,6 +79,8 @@ def train_vae(
         smiles_language (SMILESLanguage): SMILESLanguage object.
         model_dir (str): The path to the directory where model will
             be saved.
+        search (paccmann_chemistry.utils.search.Search): search strategy
+                used in the decoder.
         optimizer (str): Choice from OPTIMIZER_FACTORY. Defaults to 'Adam'.
         lr (float): The learning rate.
         kl_growth (float): The rate at which the weight grows.
@@ -102,10 +103,6 @@ def train_vae(
         save_interval (int): The interval at which the model is saved.
         loss_tracker (dict): At each log_interval, update improved test
             losses and respective epoch.
-        train_logger (Logger): Tensorboard logger objects to
-        log scalars to tfevent file.
-        val_logger (Logger): Tensorboard logger objects to
-        log scalars to tfevent file.
         logger (logging.Logger): To display information on the fly.
 
     Returns:
@@ -155,16 +152,6 @@ def train_vae(
                 f'Loss: {train_loss/log_interval:2.4f}, time spent: {time()-t}'
             )
             t = time()
-            if train_logger:
-                train_logger.scalar_summary(
-                    'loss', train_loss / log_interval, global_step
-                )
-                train_logger.scalar_summary(
-                    'decoder_loss', decoder_loss.item(), global_step
-                )
-                train_logger.scalar_summary(
-                    'KL-div', kl_div.item(), global_step
-                )
             train_loss = 0
         if _iter and _iter % save_interval == 0:
             save_dir = os.path.join(
@@ -179,7 +166,8 @@ def train_vae(
                 prime_input=torch.tensor([2]),
                 end_token=torch.tensor([3]),
                 generate_len=generate_len,
-                temperature=temperature
+                temperature=temperature,
+                search=search
             )
             smiles_language.token_indexes_to_smiles(
                 next(molecule_iter).tolist()
@@ -199,9 +187,6 @@ def train_vae(
                 f'{test_loss:.4f}, reconstruction = {test_rec:.4f}, '
                 f'KL = {test_kld:.4f}.'
             )
-
-            if val_logger:
-                val_logger.scalar_summary('test_loss', test_loss, global_step)
 
             if test_loss < loss_tracker['test_loss_a']:
                 loss_tracker.update(
