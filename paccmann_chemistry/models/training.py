@@ -63,8 +63,8 @@ def train_vae(
     epoch, model, train_dataloader, val_dataloader, smiles_language,
     model_dir, search=SamplingSearch(), optimizer='Adam', lr=1e-3,
     kl_growth=0.0015, input_keep=1., test_input_keep=0., start_index=2,
-    end_index=3, generate_len=100, temperature=0.8, log_interval=100,
-    eval_interval=200, save_interval=200, loss_tracker=None, logger=None
+    end_index=3, generate_len=100, log_interval=100, eval_interval=200,
+    save_interval=200, loss_tracker=None, logger=None
 ):  # yapf: disable
     """
     VAE train function.
@@ -93,9 +93,6 @@ def train_vae(
         start_index (int): The index of the sequence start token.
         end_index (int): The index of the sequence end token.
         generate_len (int): Length of the generated molecule.
-        temperature (float): Softmax temperature parameter between.
-            0 and 1. Lower temperatures result in a more descriminative
-            softmax.
         log_interval (int): The interval at which average loss is
             recorded.
         eval_interval (int): The interval at which a molecule is generated
@@ -166,7 +163,6 @@ def train_vae(
                 prime_input=torch.tensor([2]),
                 end_token=torch.tensor([3]),
                 generate_len=generate_len,
-                temperature=temperature,
                 search=search
             )
             smiles_language.token_indexes_to_smiles(

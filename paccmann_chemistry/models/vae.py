@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 
 from .stack_rnn import StackGRU
-from ..utils import get_device
 from ..utils.search import GreedySearch, BeamSearch, SamplingSearch
 
 
@@ -187,8 +186,7 @@ class StackGRUDecoder(StackGRU):
         prime_input,
         end_token,
         search=SamplingSearch,
-        generate_len=100,
-        temperature=0.8
+        generate_len=100
     ):
         """
         Generate SMILES From Latent Z.
@@ -205,9 +203,6 @@ class StackGRUDecoder(StackGRU):
             search (paccmann_chemistry.utils.search.Search): search strategy
                 used in the decoder.
             generate_len (int): Length of the generated molecule.
-            temperature (float): Softmax temperature parameter between
-                0 and 1. Lower temperatures result in a more descriminative
-                softmax.
 
         Returns:
             torch.Tensor: The sequence(s) for the generated molecule(s)
@@ -263,17 +258,16 @@ class StackGRUDecoder(StackGRU):
                     for an_input_token, a_hidden, a_stack in zip(
                         input_token, hidden, stack
                     )
-                ])
+                ])  # yapf: disable
                 output = torch.stack(output)
                 hidden = torch.stack(hidden)
                 stack = torch.stack(stack)
-                input_token, beams = search.step(output, beams)
+                input_token, beams = search.step(output.detach(), beams)
         if is_beam:
             generated_seq = torch.stack([
                 # get the list of tokens with the highest score
-                torch.tensor(beam[0][0])
-                for beam in beams
-            ])
+                torch.tensor(beam[0][0]) for beam in beams
+            ])  # yapf: disable
         return generated_seq
 
 
@@ -393,7 +387,7 @@ class TeacherVAE(nn.Module):
         prime_input,
         end_token,
         generate_len=100,
-        temperature=0.8
+        search=SamplingSearch
     ):
         """
         Generate SMILES From Latent Z.
@@ -412,9 +406,6 @@ class TeacherVAE(nn.Module):
                 of shape `[1]`.
                 Example: `end_token = torch.LongTensor([3])`
             generate_len (int): Length of the generated molecule.
-            temperature (float): Softmax temperature parameter between
-                0 and 1. Lower temperatures result in a more descriminative
-                softmax.
 
         Returns:
             iterable: An iterator returning the torch tensor of
@@ -428,8 +419,8 @@ class TeacherVAE(nn.Module):
             latent_z,
             prime_input,
             end_token,
-            generate_len=generate_len,
-            temperature=temperature
+            search=search,
+            generate_len=generate_len
         )
 
         molecule_gen = (

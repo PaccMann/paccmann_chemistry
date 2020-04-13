@@ -9,6 +9,9 @@ import numpy as np
 class Search(nn.Module):
     """Base search class."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
     def forward(self, logits: torch.Tensor) -> object:
         """
         Error handling.
@@ -51,6 +54,9 @@ class Search(nn.Module):
 class GreedySearch(Search):
     """"Greedy search."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def forward(self, logits: torch.Tensor) -> torch.Tensor:
         """
         Perform the greedy search.
@@ -82,15 +88,16 @@ class GreedySearch(Search):
 class SamplingSearch(Search):
     """"Sampling search."""
 
-    def __init__(self, temperature: float = 1.0):
+    def __init__(self, temperature: float = 1.0, *args, **kwargs):
         """
         Initialize the sampling search.
 
         Args:
             temperature (float, optional): temperature parameter. Defaults to
-                1.0, a.k.a., no temperature.
+                1.0, a.k.a., no temperature. Temperature < 1 results in a more 
+                descriminative softmax, > 1 in a flatter distribution.
         """
-        super().__init__()
+        super().__init__(*args, **kwargs)
         self.temperature = temperature
 
     def forward(self, logits: torch.Tensor) -> torch.Tensor:
@@ -147,7 +154,8 @@ class BeamSearch(Search):
         Args:
             beam_width (int, optional): top sequences returned. Defaults to 3.
             temperature (float, optional): temperature parameter. Defaults to
-                1.0, a.k.a., no temperature.
+                1.0, a.k.a., no temperature. Temperature < 1 results in a more
+                descriminative softmax, > 1 in a flatter distribution.
             top_tokens (int, optional): number of top dictionary tokens kept
                 for the search, defaults to 5.
         """

@@ -11,6 +11,7 @@ from paccmann_chemistry.models.vae import (
     StackGRUDecoder, StackGRUEncoder, TeacherVAE
 )
 from paccmann_chemistry.models.training import train_vae
+from paccmann_chemistry.utils.hyperparams import SEARCH_FACTORY
 from paccmann_chemistry.utils.utils import disable_rdkit_logging
 from pytoda.datasets import SMILESDataset
 from pytoda.smiles.smiles_language import SMILESLanguage
@@ -156,6 +157,13 @@ def main(parser_namespace):
         logger.info(
             'Model creation and data processing done, Training starts.'
         )
+        decoder_search = SEARCH_FACTORY[
+            params.get('decoder_search', 'Sampling')
+        ](
+            temperature=params.get('temperature', 1.),
+            beam_width=params.get('beam_width', 3),
+            top_tokens=params.get('top_tokens', 5)
+        )  # yapf: disable
 
         for epoch in range(params['epochs'] + 1):
             t = time()
@@ -166,6 +174,7 @@ def main(parser_namespace):
                 test_data_loader,
                 smiles_language,
                 model_dir,
+                search=decoder_search,
                 optimizer=params.get('optimizer', 'Adadelta'),
                 lr=params['learning_rate'],
                 kl_growth=params['kl_growth'],
@@ -174,7 +183,6 @@ def main(parser_namespace):
                 start_index=params['start_index'],
                 end_index=params['end_index'],
                 generate_len=params['generate_len'],
-                temperature=params['temperature'],
                 log_interval=params['log_interval'],
                 save_interval=params['save_interval'],
                 eval_interval=params['eval_interval'],
