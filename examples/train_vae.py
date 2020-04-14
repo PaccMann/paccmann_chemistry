@@ -63,6 +63,7 @@ parser.add_argument(
 
 def main(parser_namespace):
     try:
+        device = get_device()
         disable_rdkit_logging()
         # read the params json
         params = dict()
@@ -93,34 +94,40 @@ def main(parser_namespace):
             'vocab_size': smiles_language.number_of_tokens,
             'pad_index': smiles_language.padding_index
         })  # yapf:disable
-
         # create SMILES eager dataset
         smiles_train_data = SMILESDataset(
             train_smiles_filepath,
             smiles_language=smiles_language,
             padding=False,
-            add_start_and_stop=params.get('start_stop', True),
-            backend='eager'
+            selfies=params.get('selfies', False),
+            add_start_and_stop=params.get('add_start_stop_token', True),
+            augment=params.get('augment_smiles', False),
+            canonical=params.get('canonical', False),
+            kekulize=params.get('kekulize', False),
+            all_bonds_explicit=params.get('all_bonds_explicit', False),
+            all_hs_explicit=params.get('all_hs_explicit', False),
+            remove_bonddir=params.get('remove_bonddir', False),
+            remove_chirality=params.get('remove_chirality', False),
+            backend='lazy',
+            device=device
         )
         smiles_test_data = SMILESDataset(
             test_smiles_filepath,
             smiles_language=smiles_language,
             padding=False,
-            add_start_and_stop=params.get('start_stop', True),
-            backend='eager'
+            selfies=params.get('selfies', False),
+            add_start_and_stop=params.get('add_start_stop_token', True),
+            augment=params.get('augment_smiles', False),
+            canonical=params.get('canonical', False),
+            kekulize=params.get('kekulize', False),
+            all_bonds_explicit=params.get('all_bonds_explicit', False),
+            all_hs_explicit=params.get('all_hs_explicit', False),
+            remove_bonddir=params.get('remove_bonddir', False),
+            remove_chirality=params.get('remove_chirality', False),
+            backend='lazy',
+            device=device
         )
 
-        vocab_dict = smiles_language.index_to_token
-        params.update(
-            {
-                'start_index':
-                    list(vocab_dict.keys())
-                    [list(vocab_dict.values()).index('<START>')],
-                'end_index':
-                    list(vocab_dict.keys())
-                    [list(vocab_dict.values()).index('<STOP>')]
-            }
-        )
         # Update the smiles_vocabulary size
         if not params.get('embedding', 'learned') == 'pretrained':
             params.update({'vocab_size': smiles_language.number_of_tokens})
@@ -134,6 +141,7 @@ def main(parser_namespace):
             batch_size=params.get('batch_size', 64),
             collate_fn=collate_fn,
             drop_last=True,
+            shuffle=True,
             pin_memory=params.get('pin_memory', True),
             num_workers=params.get('num_workers', 8)
         )
@@ -143,14 +151,20 @@ def main(parser_namespace):
             batch_size=params.get('batch_size', 64),
             collate_fn=collate_fn,
             drop_last=True,
+            shuffle=True,
             pin_memory=params.get('pin_memory', True),
             num_workers=params.get('num_workers', 8)
         )
         # initialize encoder and decoder
-        device = get_device()
         gru_encoder = StackGRUEncoder(params).to(device)
         gru_decoder = StackGRUDecoder(params).to(device)
         gru_vae = TeacherVAE(gru_encoder, gru_decoder).to(device)
+        logger.info('****MODEL SUMMARY***\n')
+        for name, parameter in gru_vae.named_parameters():
+            logger.info(f'Param {name}\t, shape: {parameter.shape}')
+        total_params = sum(p.numel() for p in gru_vae.parameters())
+        logger.info(f'Total # params: {total_params}')
+
         loss_tracker = {
             'test_loss_a': 10e4,
             'test_rec_a': 10e4,
@@ -187,8 +201,6 @@ def main(parser_namespace):
                 kl_growth=params['kl_growth'],
                 input_keep=params['input_keep'],
                 test_input_keep=params['test_input_keep'],
-                start_index=params['start_index'],
-                end_index=params['end_index'],
                 generate_len=params['generate_len'],
                 log_interval=params['log_interval'],
                 save_interval=params['save_interval'],

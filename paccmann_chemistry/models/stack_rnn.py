@@ -51,7 +51,6 @@ class StackGRU(nn.Module):
         self.stack_width = params['stack_width']
         self.stack_depth = params['stack_depth']
         self.batch_size = params['batch_size']
-        self.use_cuda = torch.cuda.is_available()
         self.n_layers = params['n_layers']
 
         self.device = get_device()
@@ -115,7 +114,7 @@ class StackGRU(nn.Module):
             # but actually corresponding to batch size. In that case we also
             # resize.
             input_token = input_token.view(1, -1)
-        embedded_input = self.embedding(input_token.to(self.device))
+        embedded_input = self.embedding(input_token)
 
         if self.use_stack:
             inp, stack = self._stack_update(embedded_input, hidden, stack)
@@ -161,10 +160,7 @@ class StackGRU(nn.Module):
         batch_size = prev_stack.size(0)
         controls = controls.view(-1, 3, 1, 1)
         zeros_at_the_bottom = torch.zeros(batch_size, 1, self.stack_width)
-        if self.use_cuda:
-            zeros_at_the_bottom = Variable(zeros_at_the_bottom.cuda())
-        else:
-            zeros_at_the_bottom = Variable(zeros_at_the_bottom)
+        zeros_at_the_bottom = Variable(zeros_at_the_bottom.to(self.device))
         a_push, a_pop, a_no_op = (
             controls[:, 0], controls[:, 1], controls[:, 2]
         )
@@ -180,24 +176,15 @@ class StackGRU(nn.Module):
         if batch_size is None:
             batch_size = self.batch_size
 
-        if self.use_cuda:
-            return Variable(
-                torch.zeros(self.n_layers, batch_size, self.rnn_cell_size)
-            )
-
-        return Variable(
-            torch.zeros(self.n_layers, batch_size, self.rnn_cell_size)
-        )
+        result = torch.zeros(self.n_layers, batch_size, self.rnn_cell_size)
+        return Variable(result.to(self.device))
 
     def init_stack(self, batch_size=None):
         """Initializes Stack."""
         if batch_size is None:
             batch_size = self.batch_size
         result = torch.zeros(batch_size, self.stack_depth, self.stack_width)
-        if self.use_cuda:
-            return Variable(result.cuda())
-
-        return Variable(result)
+        return Variable(result.to(self.device))
 
     def train_step(self, input_seq, target_seq):
         """

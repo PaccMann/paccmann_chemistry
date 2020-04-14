@@ -39,8 +39,9 @@ def test_vae(model, dataloader, logger, input_keep):
             encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
                 padded_batch,
                 input_keep=input_keep,
-                start_index=2,
-                end_index=3
+                start_index=dataloader.dataset.smiles_language.start_index,
+                end_index=dataloader.dataset.smiles_language.stop_index,
+                dropout_index=dataloader.dataset.smiles_language.unknown_index
             )
 
             decoder_loss, mu, logvar = vae_model(
@@ -62,9 +63,9 @@ def test_vae(model, dataloader, logger, input_keep):
 def train_vae(
     epoch, model, train_dataloader, val_dataloader, smiles_language,
     model_dir, search=SamplingSearch(), optimizer='adam', lr=1e-3,
-    kl_growth=0.0015, input_keep=1., test_input_keep=0., start_index=2,
-    end_index=3, generate_len=100, log_interval=100, eval_interval=200,
-    save_interval=200, loss_tracker=None, logger=None
+    kl_growth=0.0015, input_keep=1., test_input_keep=0., generate_len=100,
+    log_interval=100, eval_interval=200, save_interval=200, loss_tracker=None,
+    logger=None
 ):  # yapf: disable
     """
     VAE train function.
@@ -90,8 +91,6 @@ def train_vae(
             Defaults to 1.
         test_input_keep (float): Like the input_keep parameter, but for
             test. Defaults to 0.
-        start_index (int): The index of the sequence start token.
-        end_index (int): The index of the sequence end token.
         generate_len (int): Length of the generated molecule.
         log_interval (int): The interval at which average loss is
             recorded.
@@ -128,8 +127,11 @@ def train_vae(
         encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
             padded_batch,
             input_keep=input_keep,
-            start_index=start_index,
-            end_index=end_index
+            start_index=train_dataloader.dataset.smiles_language.start_index,
+            end_index=train_dataloader.dataset.smiles_language.stop_index,
+            dropout_index=(
+                train_dataloader.dataset.smiles_language.unknown_index
+            )
         )
         optimizer.zero_grad()
         decoder_loss, mu, logvar = vae_model(
@@ -160,21 +162,24 @@ def train_vae(
             latent_z = torch.randn(1, mu.shape[0], mu.shape[1]).to(device)
             molecule_iter = vae_model.generate(
                 latent_z,
-                prime_input=torch.tensor([2]),
-                end_token=torch.tensor([3]),
+                prime_input=torch.tensor(
+                    [train_dataloader.dataset.smiles_language.start_index]
+                ).to(device),
+                end_token=torch.tensor(
+                    [train_dataloader.dataset.smiles_language.stop_index]
+                ).to(device),
                 generate_len=generate_len,
                 search=search
             )
-            smiles_language.token_indexes_to_smiles(
-                next(molecule_iter).tolist()
+            mol = next(molecule_iter).tolist()
+            mol = smiles_language.token_indexes_to_smiles(mol)
+            # SELFIES conversion if necessary
+            mol = (
+                smiles_language.selfies_to_smiles(mol)
+                if train_dataloader.dataset._dataset.selfies else mol
             )
-            logger.info(
-                '\nSample Generated Molecule:\n{}'.format(
-                    smiles_language.token_indexes_to_smiles(
-                        next(molecule_iter).tolist()
-                    )
-                )
-            )
+            logger.info(f'\nSample Generated Molecule:\n{mol}')
+
             test_loss, test_rec, test_kld = test_vae(
                 vae_model, val_dataloader, logger, test_input_keep
             )

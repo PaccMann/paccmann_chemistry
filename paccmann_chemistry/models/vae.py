@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from .stack_rnn import StackGRU
-from ..utils.search import GreedySearch, BeamSearch, SamplingSearch
+from ..utils.search import BeamSearch, SamplingSearch
 
 
 class StackGRUEncoder(StackGRU):
@@ -184,11 +184,16 @@ class StackGRUDecoder(StackGRU):
         hidden = self.latent_to_hidden(latent_z)
         stack = self.init_stack()
         loss = 0
+        outputs = []
         for input_entry, target_entry in zip(input_seq, target_seq):
             output, hidden, stack = self(
                 input_entry.unsqueeze(0), hidden, stack
             )
             loss += self.criterion(output, target_entry.squeeze())
+            outputs.append(output)
+
+        # For monitoring purposes
+        outputs = torch.argmax(torch.stack(outputs, -1), 1)
 
         return loss
 
@@ -256,10 +261,10 @@ class StackGRUDecoder(StackGRU):
         for _ in range(generate_len):
             if not is_beam:
                 output, hidden, stack = self(input_token, hidden, stack)
-                top_idx = search.step(output.detach())
+                top_idx = search.step(output)
                 # add generated_seq character to string and use as next input
                 generated_seq = torch.cat((generated_seq, top_idx), dim=1)
-                input_token = top_idx.view(1, -1)
+                input_token = top_idx.view(1, -1).to(self.device)
                 # if we don't generate in batches, we can do early stopping.
                 if batch_size == 1 and top_idx == end_token:
                     break
@@ -273,7 +278,7 @@ class StackGRUDecoder(StackGRU):
                 output = torch.stack(output)
                 hidden = torch.stack(hidden)
                 stack = torch.stack(stack)
-                input_token, beams = search.step(output.detach(), beams)
+                input_token, beams = search.step(output.detach().cpu(), beams)
         if is_beam:
             generated_seq = torch.stack([
                 # get the list of tokens with the highest score
@@ -434,7 +439,7 @@ class TeacherVAE(nn.Module):
         )
 
         molecule_gen = (
-            takewhile(lambda x: x != end_token, molecule[1:])
+            takewhile(lambda x: x != end_token.cpu(), molecule[1:])
             for molecule in generated_batch
         )   # yapf: disable
 
