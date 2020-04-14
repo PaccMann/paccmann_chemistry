@@ -6,12 +6,14 @@ import logging
 import os
 import sys
 from time import time
+import rdkit.rdBase as rkrb
+import rdkit.RDLogger as rkl
 from paccmann_chemistry.utils import collate_fn, get_device
 from paccmann_chemistry.models.vae import (
     StackGRUDecoder, StackGRUEncoder, TeacherVAE
 )
 from paccmann_chemistry.models.training import train_vae
-from paccmann_chemistry.utils.utils import disable_rdkit_logging
+from paccmann_chemistry.utils.hyperparams import SEARCH_FACTORY
 from pytoda.datasets import SMILESDataset
 from pytoda.smiles.smiles_language import SMILESLanguage
 import torch
@@ -19,6 +21,16 @@ import torch
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger('training_vae')
+
+
+def disable_rdkit_logging():
+    """
+    Disables RDKit whiny logging.
+    """
+    logger = rkl.logger()
+    logger.setLevel(rkl.ERROR)
+    rkrb.DisableLog('rdApp.error')
+
 
 # yapf: disable
 parser = argparse.ArgumentParser(description='Chemistry VAE training script.')
@@ -152,6 +164,13 @@ def main(parser_namespace):
         logger.info(
             'Model creation and data processing done, Training starts.'
         )
+        decoder_search = SEARCH_FACTORY[
+            params.get('decoder_search', 'sampling')
+        ](
+            temperature=params.get('temperature', 1.),
+            beam_width=params.get('beam_width', 3),
+            top_tokens=params.get('top_tokens', 5)
+        )  # yapf: disable
 
         for epoch in range(params['epochs'] + 1):
             t = time()
@@ -162,7 +181,8 @@ def main(parser_namespace):
                 test_data_loader,
                 smiles_language,
                 model_dir,
-                optimizer=params.get('optimizer', 'Adadelta'),
+                search=decoder_search,
+                optimizer=params.get('optimizer', 'adadelta'),
                 lr=params['learning_rate'],
                 kl_growth=params['kl_growth'],
                 input_keep=params['input_keep'],
@@ -170,7 +190,6 @@ def main(parser_namespace):
                 start_index=params['start_index'],
                 end_index=params['end_index'],
                 generate_len=params['generate_len'],
-                temperature=params['temperature'],
                 log_interval=params['log_interval'],
                 save_interval=params['save_interval'],
                 eval_interval=params['eval_interval'],

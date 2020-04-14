@@ -38,7 +38,7 @@ class StackGRU(nn.Module):
             batch_size (int): Batch size.
             lr (float, optional): Learning rate default 0.01.
             optimizer (str, optional): Choice from OPTIMIZER_FACTORY.
-                Defaults to 'Adadelta'.
+                Defaults to 'adadelta'.
             padding_index (int, optional): Index of the padding token.
                 Defaults to 0.
         """
@@ -85,7 +85,7 @@ class StackGRU(nn.Module):
         self.output_layer = nn.Linear(self.rnn_cell_size, self.vocab_size)
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = OPTIMIZER_FACTORY[
-            params.get('optimizer', 'Adadelta')
+            params.get('optimizer', 'adadelta')
         ](self.parameters(), lr=params.get('lr', 0.01))  # yapf: disable
 
         self._check_params()
@@ -96,7 +96,8 @@ class StackGRU(nn.Module):
 
         Args:
             input_token (torch.Tensor): LongTensor containing
-                indices of the input token of size `[1, batch_size]`.
+                indices of the input token of size `batch_size` or
+                `[1, batch_size]`.
             hidden (torch.Tensor): Hidden state of size
                 `[n_layers, batch_size, rnn_cell_size]`.
             stack (torch.Tensor): Previous step's stack of size
@@ -230,53 +231,6 @@ class StackGRU(nn.Module):
         self.optimizer.step()
 
         return loss.item() / len(input_seq)
-
-    def generate(
-        self, prime_input, end_token, generate_len=100, temperature=0.8
-    ):
-        """
-        The evaluation method.
-
-        Args:
-            prime_input (torch.tensor): Indices for the priming string of size
-                `[batch_size, length of priming sequences]`.
-                Example: `prime_input = torch.tensor([[2, 4, 5], [2, 4, 7]])`
-            end_token (torch.tensor): End token for the generated molecule.
-            generate_len (int): Length of the generated molecule.
-            temperature (float): Softmax temperature parameter between 0 and 1.
-                Lower temperatures result in a more descriminative softmax.
-
-        Returns:
-            The sequence of indices for the generated molecule.
-        """
-        prime_input = prime_input.transpose(1, 0).view(-1, 1, len(prime_input))
-        batch_size = prime_input.shape[-1]
-        hidden = self.init_hidden(batch_size)
-        stack = self.init_stack(batch_size)
-        generated_seq = prime_input.transpose(0, 2)
-        # Use priming string to "build up" hidden state
-        for prime_entry in prime_input[:-1]:
-            _, hidden, stack = self(prime_entry, hidden, stack)
-        input_token = prime_input[-1]
-
-        for _ in range(generate_len):
-            output, hidden, stack = self(input_token, hidden, stack)
-
-            # Sample from the network as a multinomial distribution
-            output_dist = output.data.cpu().view(batch_size,
-                                                 -1).div(temperature).exp()
-            top_idx = torch.tensor(
-                torch.multinomial(output_dist, 1).cpu().numpy()
-            )
-            # Add generated_seq character to string and use as next input
-            generated_seq = torch.cat(
-                (generated_seq, top_idx.unsqueeze(2)), dim=2
-            )
-            input_token = top_idx.view(1, -1)
-            # break when end token is generated
-            if batch_size == 1 and top_idx == end_token:
-                break
-        return generated_seq
 
     def _check_params(self):
         """
