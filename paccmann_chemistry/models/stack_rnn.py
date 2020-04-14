@@ -27,10 +27,9 @@ class StackGRU(nn.Module):
             params (dict): Hyperparameters.
 
         Items in params:
-            input_size (int): Vocabulary size.
             embedding_size (int): The embedding size for the dict tokens
             rnn_cell_size (int): Hidden size of GRU.
-            output_size (int): Output size of GRU (vocab size).
+            vocab_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
             n_layers (int): The number of GRU layer.
@@ -42,30 +41,27 @@ class StackGRU(nn.Module):
                 Defaults to 'adadelta'.
             padding_index (int, optional): Index of the padding token.
                 Defaults to 0.
-            bidirectional (bool, optional): Whether to train a bidirectional
-                GRU. Defaults to False.
         """
 
         super(StackGRU, self).__init__()
 
-        self.input_size = params['input_size']
         self.embedding_size = params['embedding_size']
         self.rnn_cell_size = params['rnn_cell_size']
-        self.output_size = params['output_size']
+        self.vocab_size = params['vocab_size']
         self.stack_width = params['stack_width']
         self.stack_depth = params['stack_depth']
         self.batch_size = params['batch_size']
         self.use_cuda = torch.cuda.is_available()
         self.n_layers = params['n_layers']
-        self.use_stack = params.get('use_stack', True)  # Used for testing rn
-        self.bidirectional = params.get('bidirectional', False)
-        self.n_directions = 2 if self.bidirectional else 1
+
         self.device = get_device()
 
         self.gru_input = self.embedding_size
+        self.use_stack = params.get('use_stack', True)
         if self.use_stack:
             self.gru_input += self.stack_width
-
+        else:
+            warnings.warn('Attention: No stack will be used')
         # Network
         self.stack_controls_layer = nn.Linear(
             in_features=self.rnn_cell_size, out_features=3
@@ -74,8 +70,8 @@ class StackGRU(nn.Module):
             in_features=self.rnn_cell_size, out_features=self.stack_width
         )
 
-        self.encoder = nn.Embedding(
-            self.input_size,
+        self.embedding = nn.Embedding(
+            self.vocab_size,
             self.embedding_size,
             padding_idx=params.get('pad_index', 0)
         )
@@ -83,12 +79,10 @@ class StackGRU(nn.Module):
             self.gru_input,
             self.rnn_cell_size,
             self.n_layers,
-            bidirectional=self.bidirectional,
+            bidirectional=False,
             dropout=params['dropout']
         )
-        self.decoder = nn.Linear(
-            self.rnn_cell_size * self.n_directions, self.output_size
-        )
+        self.output_layer = nn.Linear(self.rnn_cell_size, self.vocab_size)
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = OPTIMIZER_FACTORY[
             params.get('optimizer', 'adadelta')
@@ -105,14 +99,14 @@ class StackGRU(nn.Module):
                 indices of the input token of size `batch_size` or
                 `[1, batch_size]`.
             hidden (torch.Tensor): Hidden state of size
-                `[n_layers*n_directions, batch_size, rnn_cell_size]`.
+                `[n_layers, batch_size, rnn_cell_size]`.
             stack (torch.Tensor): Previous step's stack of size
                 `[batch_size, stack_depth, stack_width]`.
 
         Returns:
             (torch.Tensor, torch.Tensor, torch.Tensor): output, hidden, stack.
 
-            Output of size `[batch_size, output_size]`.
+            Output of size `[batch_size, vocab_size]`.
             Hidden state of size `[1, batch_size, rnn_cell_size]`.
             Stack of size `[batch_size, stack_depth, stack_width]`.
         """
@@ -121,16 +115,15 @@ class StackGRU(nn.Module):
             # but actually corresponding to batch size. In that case we also
             # resize.
             input_token = input_token.view(1, -1)
-        embedded_input = self.encoder(input_token.to(self.device))
+        embedded_input = self.embedding(input_token.to(self.device))
 
         if self.use_stack:
             inp, stack = self._stack_update(embedded_input, hidden, stack)
         else:
-            # NOTE: At the moment, this is here for just purely testing reasons
             inp = embedded_input
 
         output, hidden = self.gru(inp, hidden)
-        output = self.decoder(output).squeeze()
+        output = self.output_layer(output).squeeze()
         return output, hidden, stack
 
     def _stack_update(self, embedded_input, hidden, stack):
@@ -189,17 +182,11 @@ class StackGRU(nn.Module):
 
         if self.use_cuda:
             return Variable(
-                torch.zeros(
-                    self.n_layers * self.n_directions, batch_size,
-                    self.rnn_cell_size
-                ).cuda()
+                torch.zeros(self.n_layers, batch_size, self.rnn_cell_size)
             )
 
         return Variable(
-            torch.zeros(
-                self.n_layers * self.n_directions, batch_size,
-                self.rnn_cell_size
-            )
+            torch.zeros(self.n_layers, batch_size, self.rnn_cell_size)
         )
 
     def init_stack(self, batch_size=None):

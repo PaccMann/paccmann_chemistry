@@ -20,9 +20,8 @@ class StackGRUEncoder(StackGRU):
 
         Items in params:
             latent_dim (int): Size of latent mean and variance.
-            input_size (int): Vocabulary size.
             rnn_cell_size (int): Hidden size of GRU.
-            output_size (int): Output size of GRU (vocab size).
+            vocab_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
             n_layers (int): The number of GRU layer.
@@ -38,6 +37,15 @@ class StackGRUEncoder(StackGRU):
                 GRU. Defaults to False.
         """
         super(StackGRUEncoder, self).__init__(params)
+
+        self.bidirectional = params.get('bidirectional', False)
+        self.n_directions = 2 if self.bidirectional else 1
+
+        # In case of bidirectionality, we create a second StackGRU object that
+        # will see the sequence in reverse direction
+        if self.bidirectional:
+            self.backward_stackgru = StackGRU(params)
+
         self.latent_dim = params['latent_dim']
         self.hidden_to_mu = nn.Linear(
             in_features=self.rnn_cell_size * self.n_directions,
@@ -67,12 +75,33 @@ class StackGRUEncoder(StackGRU):
             logvar is the log of the latent variance of shape
                 `[1, batch_size, latent_dim]`.
         """
+
+        # Forward pass
         hidden = self.init_hidden()
         stack = self.init_stack()
         for input_entry in input_seq:
             output, hidden, stack = self(input_entry, hidden, stack)
 
         hidden = self._post_gru_reshape(hidden)
+
+        # Backward pass:
+        if self.bidirectional:
+            assert len(input_seq.shape) == 2, 'Input Seq must be 2D Tensor.'
+            hidden_backward = self.backward_stackgru.init_hidden()
+            stack_backward = self.backward_stackgru.init_stack()
+
+            # [::-1] not yet implemented in torch.
+            # We roll up time from end to start
+            for input_entry_idx in range(len(input_seq) - 1, -1, -1):
+                output_backward, hidden_backward, stack_backward = (
+                    self.backward_stackgru(
+                        input_seq[input_entry_idx], hidden_backward,
+                        stack_backward
+                    )
+                )
+            # Concatenate forward and backward
+            hidden_backward = self._post_gru_reshape(hidden_backward)
+            hidden = torch.cat([hidden, hidden_backward], axis=1)
 
         mu = self.hidden_to_mu(hidden)
         logvar = self.hidden_to_logvar(hidden)
@@ -81,10 +110,7 @@ class StackGRUEncoder(StackGRU):
 
     def _post_gru_reshape(self, hidden: torch.Tensor) -> torch.Tensor:
         expected_shape = torch.tensor(
-            [
-                self.n_layers * self.n_directions, self.batch_size,
-                self.rnn_cell_size
-            ]
+            [self.n_layers, self.batch_size, self.rnn_cell_size]
         )
         if not torch.equal(torch.tensor(hidden.shape), expected_shape):
             raise ValueError(
@@ -92,21 +118,8 @@ class StackGRUEncoder(StackGRU):
                 f'Expected shape: {expected_shape}'
             )
 
-        # Reshape to disentangle layers and directions
-        hidden = hidden.view(
-            self.n_layers, self.n_directions, self.batch_size,
-            self.rnn_cell_size
-        )
-        # Layers x Directions x Batch x Cell_size -> D x B x C
-        hidden = hidden[-1, :, :, :]
-
-        # D x B x C -> B x D x C
-        hidden = hidden.permute(1, 0, 2)
-
-        # B x D x C -> B x D*C
-        hidden = hidden.reshape(
-            self.batch_size, self.rnn_cell_size * self.n_directions
-        )
+        # Layers x Batch x Cell_size ->  B x C
+        hidden = hidden[-1, :, :]
 
         return hidden
 
@@ -123,9 +136,8 @@ class StackGRUDecoder(StackGRU):
 
         Items in params:
             latent_dim (int): Size of latent mean and variance.
-            input_size (int): Vocabulary size.
             rnn_cell_size (int): Hidden size of GRU.
-            output_size (int): Output size of GRU (vocab size).
+            vocab_size (int): Output size of GRU (vocab size).
             stack_width (int): Number of stacks in parallel.
             stack_depth (int): Stack depth.
             n_layers (int): The number of GRU layer.
@@ -344,8 +356,7 @@ class TeacherVAE(nn.Module):
             the cross-entropy training loss for the decoder.
         """
         n_layers = self.decoder.n_layers
-        n_directions = self.decoder.n_directions
-        latent_z = latent_z.repeat(n_layers * n_directions, 1, 1)
+        latent_z = latent_z.repeat(n_layers, 1, 1)
         decoder_loss = self.decoder.decoder_train_step(
             latent_z, input_seq, target_seq
         )
@@ -433,11 +444,11 @@ class TeacherVAE(nn.Module):
 
         return molecule_iter
 
-    def save_model(self, path, *args, **kwargs):
+    def save(self, path, *args, **kwargs):
         """Save model to path."""
         torch.save(self.state_dict(), path, *args, **kwargs)
 
-    def load_model(self, path, *args, **kwargs):
+    def load(self, path, *args, **kwargs):
         """Load model from path."""
         weights = torch.load(path, *args, **kwargs)
         self.load_state_dict(weights)

@@ -12,10 +12,9 @@ class TestStackGRUEncoder(unittest.TestCase):
 
     default_params = {
         'latent_dim': 128,
-        'input_size': 12,
         'rnn_cell_size': 30,
         'embedding_size': 80,
-        'output_size': 100,
+        'vocab_size': 100,
         'stack_width': 50,
         'stack_depth': 51,
         'n_layers': 3,
@@ -35,18 +34,17 @@ class TestStackGRUEncoder(unittest.TestCase):
         params = self.default_params
         cell_size = params['rnn_cell_size']
         n_layers = params['n_layers']
-        n_directions = 2 if params['bidirectional'] else 1
         batch_size = params['batch_size']
 
         gru_stack = StackGRUEncoder(params)
 
-        correct_sample = np.arange(n_directions * cell_size)  # D*C
+        correct_sample = np.arange(cell_size)  # C
 
         # Emulate the hidden layer of the GRU
-        hidden = np.tile(correct_sample, n_layers)  # Lx(D*C)
-        hidden = hidden.reshape(n_layers * n_directions, cell_size)  # (L*D)xC
+        hidden = np.tile(correct_sample, n_layers)  # LxC
+        hidden = hidden.reshape(n_layers, cell_size)  # LxC
         hidden = [torch.Tensor(hidden) for _ in range(batch_size)]
-        hidden = torch.stack(hidden, dim=1)  # LDxBxC
+        hidden = torch.stack(hidden, dim=1)  # LxBxC
 
         hidden = gru_stack._post_gru_reshape(hidden)
 
@@ -93,7 +91,7 @@ class TestStackGRUEncoder(unittest.TestCase):
 
         params = self.default_params
         params['batch_size'] = 128
-        params['input_size'] = 55
+        params['vocab_size'] = 55
         params['use_stack'] = use_stack
 
         device = torch.device('cpu')
