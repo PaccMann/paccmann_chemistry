@@ -25,11 +25,9 @@ def sequential_data_preparation(
         start_index (int): The index of the sequence start token.
         end_index (int): The index of the sequence end token.
         dropout_index (int): The index of the dropout token. Defaults to 1.
-
     Returns:
     (torch.Tensor, torch.Tensor, torch.Tensor): encoder_seq, decoder_seq,
         target_seq
-
         encoder_seq is a batch of padded input sequences starting with the
             start_index, of size `[sequence length +1, batch_size, 1]`.
         decoder_seq is like encoder_seq but word dropout is applied
@@ -65,6 +63,71 @@ def sequential_data_preparation(
     target_seq = target_seq.transpose(1, 0)
     device = get_device()
     return input_seq.to(device), decoder_seq.to(device), target_seq.to(device)
+
+
+def packed_sequential_data_preparation(
+    input_batch,
+    input_keep=1,
+    start_index=2,
+    end_index=3,
+    dropout_index=1,
+):
+    """
+    Sequential Training Data Builder.
+
+    Args:
+        input_batch (torch.Tensor): Batch of padded sequences, output of
+            nn.utils.rnn.pad_sequence(batch) of size
+            `[sequence length, batch_size, 1]`.
+        input_keep (float): The probability not to drop input sequence tokens
+            according to a Bernoulli distribution with p = input_keep.
+            Defaults to 1.
+        start_index (int): The index of the sequence start token.
+        end_index (int): The index of the sequence end token.
+        dropout_index (int): The index of the dropout token. Defaults to 1.
+
+    Returns:
+    (torch.Tensor, torch.Tensor, torch.Tensor): encoder_seq, decoder_seq,
+        target_seq
+
+        encoder_seq is a batch of padded input sequences starting with the
+            start_index, of size `[sequence length +1, batch_size, 1]`.
+        decoder_seq is like encoder_seq but word dropout is applied
+            (so if input_keep==1, then decoder_seq = encoder_seq).
+        target_seq (torch.Tensor): Batch of padded target sequences ending
+            in the end_index, of size `[sequence length +1, batch_size, 1]`.
+    """
+
+    def _process_sample(sample):
+        if len(sample.shape) != 1:
+            raise ValueError
+        input = torch.LongTensor(sample.cpu().numpy())
+        decoder = input.clone()
+
+        # apply token dropout if keep != 1
+        if input_keep != 1:
+            # mask for token dropout
+            mask = Bernoulli(input_keep).sample(input.shape)
+            mask = torch.LongTensor(mask.numpy())
+            dropout_loc = np.where(mask == 0)[0]
+            decoder[dropout_loc] = dropout_index
+
+        # TODO: Don't we have the start index at the begining already?
+        # input_seq = torch.cat((torch.tensor([start_index]), input))
+        # decoder_seq = torch.cat((torch.tensor([start_index]), decoder))
+
+        target = input.detach().clone()  # just .clone() propagates to graph
+        device = get_device()
+        return input.to(device), decoder.to(device), target.to(device)
+
+    batch = [_process_sample(sample) for sample in input_batch]
+
+    encoder_decoder_target = zip(*batch)
+    encoder_decoder_target = [
+        torch.nn.utils.rnn.pack_sequence(entry)
+        for entry in encoder_decoder_target
+    ]
+    return encoder_decoder_target
 
 
 def collate_fn(batch):

@@ -7,7 +7,7 @@ import torch
 from ..utils.search import SamplingSearch
 from ..utils.hyperparams import OPTIMIZER_FACTORY
 from ..utils.loss_functions import vae_loss_function
-from ..utils import get_device, sequential_data_preparation
+from ..utils import get_device, sequential_data_preparation, packed_sequential_data_preparation
 
 
 def test_vae(model, dataloader, logger, input_keep):
@@ -123,17 +123,18 @@ def train_vae(
     for _iter, batch in enumerate(train_dataloader):
 
         global_step = (epoch - 1) * len(train_dataloader) + _iter
-        padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
-        padded_batch = padded_batch.to(device)
-        encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
-            padded_batch,
-            input_keep=input_keep,
-            start_index=train_dataloader.dataset.smiles_language.start_index,
-            end_index=train_dataloader.dataset.smiles_language.stop_index,
-            dropout_index=(
-                train_dataloader.dataset.smiles_language.unknown_index
-            )
-        )
+        # padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
+        # packed_batck = torch.nn.utils.rnn.pack_sequence(batch)
+        # padded_batch = padded_batch.to(device)
+
+        # WIP: We will use packed sequences instead of padded sequences
+        (encoder_seq, decoder_seq,
+         target_seq) = packed_sequential_data_preparation(
+             batch,
+             input_keep=input_keep,
+             start_index=start_index,
+             end_index=end_index
+         )
         optimizer.zero_grad()
         decoder_loss, mu, logvar = vae_model(
             encoder_seq, decoder_seq, target_seq
