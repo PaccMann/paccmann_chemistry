@@ -39,7 +39,7 @@ class StackGRU(nn.Module):
             batch_size (int): Batch size.
             lr (float, optional): Learning rate default 0.01.
             optimizer (str, optional): Choice from OPTIMIZER_FACTORY.
-                Defaults to 'Adadelta'.
+                Defaults to 'adadelta'.
             padding_index (int, optional): Index of the padding token.
                 Defaults to 0.
             bidirectional (bool, optional): Whether to train a bidirectional
@@ -91,7 +91,7 @@ class StackGRU(nn.Module):
         )
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = OPTIMIZER_FACTORY[
-            params.get('optimizer', 'Adadelta')
+            params.get('optimizer', 'adadelta')
         ](self.parameters(), lr=params.get('lr', 0.01))  # yapf: disable
 
         self._check_params()

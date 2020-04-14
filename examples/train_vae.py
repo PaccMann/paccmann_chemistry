@@ -6,13 +6,14 @@ import logging
 import os
 import sys
 from time import time
+import rdkit.rdBase as rkrb
+import rdkit.RDLogger as rkl
 from paccmann_chemistry.utils import collate_fn, get_device
 from paccmann_chemistry.models.vae import (
     StackGRUDecoder, StackGRUEncoder, TeacherVAE
 )
 from paccmann_chemistry.models.training import train_vae
 from paccmann_chemistry.utils.hyperparams import SEARCH_FACTORY
-from paccmann_chemistry.utils.utils import disable_rdkit_logging
 from pytoda.datasets import SMILESDataset
 from pytoda.smiles.smiles_language import SMILESLanguage
 import torch
@@ -20,6 +21,16 @@ import torch
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger('training_vae')
+
+
+def disable_rdkit_logging():
+    """
+    Disables RDKit whiny logging.
+    """
+    logger = rkl.logger()
+    logger.setLevel(rkl.ERROR)
+    rkrb.DisableLog('rdApp.error')
+
 
 # yapf: disable
 parser = argparse.ArgumentParser(description='Chemistry VAE training script.')
@@ -158,7 +169,7 @@ def main(parser_namespace):
             'Model creation and data processing done, Training starts.'
         )
         decoder_search = SEARCH_FACTORY[
-            params.get('decoder_search', 'Sampling')
+            params.get('decoder_search', 'sampling')
         ](
             temperature=params.get('temperature', 1.),
             beam_width=params.get('beam_width', 3),
@@ -175,7 +186,7 @@ def main(parser_namespace):
                 smiles_language,
                 model_dir,
                 search=decoder_search,
-                optimizer=params.get('optimizer', 'Adadelta'),
+                optimizer=params.get('optimizer', 'adadelta'),
                 lr=params['learning_rate'],
                 kl_growth=params['kl_growth'],
                 input_keep=params['input_keep'],

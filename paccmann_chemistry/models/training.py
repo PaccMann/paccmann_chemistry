@@ -61,7 +61,7 @@ def test_vae(model, dataloader, logger, input_keep):
 
 def train_vae(
     epoch, model, train_dataloader, val_dataloader, smiles_language,
-    model_dir, search=SamplingSearch(), optimizer='Adam', lr=1e-3,
+    model_dir, search=SamplingSearch(), optimizer='adam', lr=1e-3,
     kl_growth=0.0015, input_keep=1., test_input_keep=0., start_index=2,
     end_index=3, generate_len=100, log_interval=100, eval_interval=200,
     save_interval=200, loss_tracker=None, logger=None
@@ -81,7 +81,7 @@ def train_vae(
             be saved.
         search (paccmann_chemistry.utils.search.Search): search strategy
                 used in the decoder.
-        optimizer (str): Choice from OPTIMIZER_FACTORY. Defaults to 'Adam'.
+        optimizer (str): Choice from OPTIMIZER_FACTORY. Defaults to 'adam'.
         lr (float): The learning rate.
         kl_growth (float): The rate at which the weight grows.
             Defaults to 0.0015 resulting in a weight of 1 around step=9000.

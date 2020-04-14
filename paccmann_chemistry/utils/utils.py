@@ -2,10 +2,7 @@
 import copy
 import logging
 import math
-
 import numpy as np
-import rdkit.rdBase as rkrb
-import rdkit.RDLogger as rkl
 import torch
 from torch.distributions.bernoulli import Bernoulli
 
@@ -114,7 +111,7 @@ def kl_weight(step, growth_rate=0.004):
 
 
 def get_device():
-    return torch.device("cuda" if cuda() else "cpu")
+    return torch.device('cuda' if cuda() else 'cpu')
 
 
 def cuda():
@@ -123,12 +120,3 @@ def cuda():
 
 def to_np(x):
     return x.data.cpu().numpy()
-
-
-def disable_rdkit_logging():
-    """
-    Disables RDKit whiny logging.
-    """
-    logger = rkl.logger()
-    logger.setLevel(rkl.ERROR)
-    rkrb.DisableLog('rdApp.error')

@@ -31,7 +31,7 @@ class StackGRUEncoder(StackGRU):
             batch_size (int): Batch size.
             lr (float, optional): Learning rate default 0.01.
             optimizer (str, optional): Choice from OPTIMIZER_FACTORY.
-                Defaults to 'Adadelta'.
+                Defaults to 'adadelta'.
             padding_index (int, optional): Index of the padding token.
                 Defaults to 0.
             bidirectional (bool, optional): Whether to train a bidirectional
@@ -134,7 +134,7 @@ class StackGRUDecoder(StackGRU):
             batch_size (int): Batch size.
             lr (float, optional): Learning rate default 0.01.
             optimizer (str, optional): Choice from OPTIMIZER_FACTORY.
-                Defaults to 'Adadelta'.
+                Defaults to 'adadelta'.
             padding_index (int, optional): Index of the padding token.
                 Defaults to 0.
             bidirectional (bool, optional): Whether to train a bidirectional
@@ -245,7 +245,7 @@ class StackGRUDecoder(StackGRU):
         for _ in range(generate_len):
             if not is_beam:
                 output, hidden, stack = self(input_token, hidden, stack)
-                top_idx = search.step(output)
+                top_idx = search.step(output.detach())
                 # add generated_seq character to string and use as next input
                 generated_seq = torch.cat((generated_seq, top_idx), dim=1)
                 input_token = top_idx.view(1, -1)
