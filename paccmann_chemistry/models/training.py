@@ -167,15 +167,15 @@ def train_vae(
                 generate_len=generate_len,
                 search=search
             )
-            smiles_language.token_indexes_to_smiles(
-                next(molecule_iter).tolist()
+            mol = next(molecule_iter).tolist()
+            mol = smiles_language.token_indexes_to_smiles(mol)
+            # SELFIES conversion if necessary
+            mol = (
+                smiles_language.selfies_to_smiles(mol)
+                if train_dataloader.dataset._dataset.selfies else mol
             )
-            mol = next(molecule_iter)
-            logger.info(
-                '\nSample Generated Molecule:\n{}'.format(
-                    smiles_language.token_indexes_to_smiles(mol.tolist())
-                )
-            )
+            logger.info(f'\nSample Generated Molecule:\n{mol}')
+
             test_loss, test_rec, test_kld = test_vae(
                 vae_model, val_dataloader, logger, test_input_keep
             )

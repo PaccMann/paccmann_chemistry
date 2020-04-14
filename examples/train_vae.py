@@ -93,20 +93,35 @@ def main(parser_namespace):
             'vocab_size': smiles_language.number_of_tokens,
             'pad_index': smiles_language.padding_index
         })  # yapf:disable
-
         # create SMILES eager dataset
         smiles_train_data = SMILESDataset(
             train_smiles_filepath,
             smiles_language=smiles_language,
             padding=False,
-            add_start_and_stop=params.get('start_stop', True),
+            selfies=params.get('selfies', False),
+            add_start_and_stop=params.get('add_start_stop_token', True),
+            augment=params.get('augment_smiles', False),
+            canonical=params.get('canonical', False),
+            kekulize=params.get('kekulize', False),
+            all_bonds_explicit=params.get('all_bonds_explicit', False),
+            all_hs_explicit=params.get('all_hs_explicit', False),
+            remove_bonddir=params.get('remove_bonddir', False),
+            remove_chirality=params.get('remove_chirality', False),
             backend='eager'
         )
         smiles_test_data = SMILESDataset(
             test_smiles_filepath,
             smiles_language=smiles_language,
             padding=False,
-            add_start_and_stop=params.get('start_stop', True),
+            selfies=params.get('selfies', False),
+            add_start_and_stop=params.get('add_start_stop_token', True),
+            augment=params.get('augment_smiles', False),
+            canonical=params.get('canonical', False),
+            kekulize=params.get('kekulize', False),
+            all_bonds_explicit=params.get('all_bonds_explicit', False),
+            all_hs_explicit=params.get('all_hs_explicit', False),
+            remove_bonddir=params.get('remove_bonddir', False),
+            remove_chirality=params.get('remove_chirality', False),
             backend='eager'
         )
 

@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from .stack_rnn import StackGRU
-from ..utils.search import GreedySearch, BeamSearch, SamplingSearch
+from ..utils.search import BeamSearch, SamplingSearch
 
 
 class StackGRUEncoder(StackGRU):
@@ -184,11 +184,16 @@ class StackGRUDecoder(StackGRU):
         hidden = self.latent_to_hidden(latent_z)
         stack = self.init_stack()
         loss = 0
+        outputs = []
         for input_entry, target_entry in zip(input_seq, target_seq):
             output, hidden, stack = self(
                 input_entry.unsqueeze(0), hidden, stack
             )
             loss += self.criterion(output, target_entry.squeeze())
+            outputs.append(output)
+
+        # For monitoring purposes
+        outputs = torch.argmax(torch.stack(outputs, -1), 1)
 
         return loss
 
