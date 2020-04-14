@@ -4,6 +4,7 @@ from torch import nn
 from math import log
 from sys import float_info
 import numpy as np
+from .utils import get_device
 
 
 class Search(nn.Module):
@@ -11,6 +12,7 @@ class Search(nn.Module):
 
     def __init__(self, *args, **kwargs):
         super().__init__()
+        self.device = get_device()
 
     def forward(self, logits: torch.Tensor) -> object:
         """
@@ -269,5 +271,5 @@ class BeamSearch(Search):
                 torch.tensor([beam[0][-1] for beam in sample_beams])
                 for sample_beams in updated_beams
             ]
-        ).permute(1, 0)
+        ).permute(1, 0).to(self.device)
         return (token_beams, updated_beams)

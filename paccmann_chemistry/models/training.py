@@ -162,8 +162,12 @@ def train_vae(
             latent_z = torch.randn(1, mu.shape[0], mu.shape[1]).to(device)
             molecule_iter = vae_model.generate(
                 latent_z,
-                prime_input=torch.tensor([2]),
-                end_token=torch.tensor([3]),
+                prime_input=torch.tensor(
+                    [train_dataloader.dataset.smiles_language.start_index]
+                ).to(device),
+                end_token=torch.tensor(
+                    [train_dataloader.dataset.smiles_language.stop_index]
+                ).to(device),
                 generate_len=generate_len,
                 search=search
             )

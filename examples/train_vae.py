@@ -63,6 +63,7 @@ parser.add_argument(
 
 def main(parser_namespace):
     try:
+        device = get_device()
         disable_rdkit_logging()
         # read the params json
         params = dict()
@@ -107,7 +108,8 @@ def main(parser_namespace):
             all_hs_explicit=params.get('all_hs_explicit', False),
             remove_bonddir=params.get('remove_bonddir', False),
             remove_chirality=params.get('remove_chirality', False),
-            backend='eager'
+            backend='lazy',
+            device=device
         )
         smiles_test_data = SMILESDataset(
             test_smiles_filepath,
@@ -122,7 +124,8 @@ def main(parser_namespace):
             all_hs_explicit=params.get('all_hs_explicit', False),
             remove_bonddir=params.get('remove_bonddir', False),
             remove_chirality=params.get('remove_chirality', False),
-            backend='eager'
+            backend='lazy',
+            device=device
         )
 
         # Update the smiles_vocabulary size
@@ -153,10 +156,15 @@ def main(parser_namespace):
             num_workers=params.get('num_workers', 8)
         )
         # initialize encoder and decoder
-        device = get_device()
         gru_encoder = StackGRUEncoder(params).to(device)
         gru_decoder = StackGRUDecoder(params).to(device)
         gru_vae = TeacherVAE(gru_encoder, gru_decoder).to(device)
+        logger.info('****MODEL SUMMARY***\n')
+        for name, parameter in gru_vae.named_parameters():
+            logger.info(f'Param {name}\t, shape: {parameter.shape}')
+        total_params = sum(p.numel() for p in gru_vae.parameters())
+        logger.info(f'Total # params: {total_params}')
+
         loss_tracker = {
             'test_loss_a': 10e4,
             'test_rec_a': 10e4,
