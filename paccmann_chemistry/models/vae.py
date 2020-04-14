@@ -224,8 +224,7 @@ class StackGRUDecoder(StackGRU):
             end_token must be discarded.
         """
         n_layers = self.n_layers
-        n_directions = self.n_directions
-        latent_z = latent_z.repeat(n_layers * n_directions, 1, 1)
+        latent_z = latent_z.repeat(n_layers, 1, 1)
         hidden = self.latent_to_hidden(latent_z)
         batch_size = hidden.shape[1]
         stack = self.init_stack(batch_size)
