@@ -110,17 +110,6 @@ def main(parser_namespace):
             backend='eager'
         )
 
-        vocab_dict = smiles_language.index_to_token
-        params.update(
-            {
-                'start_index':
-                    list(vocab_dict.keys())
-                    [list(vocab_dict.values()).index('<START>')],
-                'end_index':
-                    list(vocab_dict.keys())
-                    [list(vocab_dict.values()).index('<STOP>')]
-            }
-        )
         # Update the smiles_vocabulary size
         if not params.get('embedding', 'learned') == 'pretrained':
             params.update({'vocab_size': smiles_language.number_of_tokens})
@@ -134,6 +123,7 @@ def main(parser_namespace):
             batch_size=params.get('batch_size', 64),
             collate_fn=collate_fn,
             drop_last=True,
+            shuffle=True,
             pin_memory=params.get('pin_memory', True),
             num_workers=params.get('num_workers', 8)
         )
@@ -143,6 +133,7 @@ def main(parser_namespace):
             batch_size=params.get('batch_size', 64),
             collate_fn=collate_fn,
             drop_last=True,
+            shuffle=True,
             pin_memory=params.get('pin_memory', True),
             num_workers=params.get('num_workers', 8)
         )
@@ -187,8 +178,6 @@ def main(parser_namespace):
                 kl_growth=params['kl_growth'],
                 input_keep=params['input_keep'],
                 test_input_keep=params['test_input_keep'],
-                start_index=params['start_index'],
-                end_index=params['end_index'],
                 generate_len=params['generate_len'],
                 log_interval=params['log_interval'],
                 save_interval=params['save_interval'],
