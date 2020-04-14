@@ -4,7 +4,7 @@ import os
 from time import time
 
 import torch
-
+from ..utils.search import SamplingSearch
 from ..utils.hyperparams import OPTIMIZER_FACTORY
 from ..utils.loss_functions import vae_loss_function
 from ..utils import get_device, sequential_data_preparation
@@ -61,9 +61,9 @@ def test_vae(model, dataloader, logger, input_keep):
 
 def train_vae(
     epoch, model, train_dataloader, val_dataloader, smiles_language,
-    model_dir, optimizer='Adam', lr=1e-3, kl_growth=0.0015, input_keep=1.,
-    test_input_keep=0., start_index=2, end_index=3, generate_len=100,
-    temperature=0.8, log_interval=100, eval_interval=200,
+    model_dir, search=SamplingSearch(), optimizer='adam', lr=1e-3,
+    kl_growth=0.0015, input_keep=1., test_input_keep=0., start_index=2,
+    end_index=3, generate_len=100, log_interval=100, eval_interval=200,
     save_interval=200, loss_tracker=None, logger=None
 ):  # yapf: disable
     """
@@ -79,7 +79,9 @@ def train_vae(
         smiles_language (SMILESLanguage): SMILESLanguage object.
         model_dir (str): The path to the directory where model will
             be saved.
-        optimizer (str): Choice from OPTIMIZER_FACTORY. Defaults to 'Adam'.
+        search (paccmann_chemistry.utils.search.Search): search strategy
+                used in the decoder.
+        optimizer (str): Choice from OPTIMIZER_FACTORY. Defaults to 'adam'.
         lr (float): The learning rate.
         kl_growth (float): The rate at which the weight grows.
             Defaults to 0.0015 resulting in a weight of 1 around step=9000.
@@ -91,9 +93,6 @@ def train_vae(
         start_index (int): The index of the sequence start token.
         end_index (int): The index of the sequence end token.
         generate_len (int): Length of the generated molecule.
-        temperature (float): Softmax temperature parameter between.
-            0 and 1. Lower temperatures result in a more descriminative
-            softmax.
         log_interval (int): The interval at which average loss is
             recorded.
         eval_interval (int): The interval at which a molecule is generated
@@ -155,20 +154,16 @@ def train_vae(
             save_dir = os.path.join(
                 model_dir, f'weights/saved_model_epoch_{epoch}_iter_{_iter}.pt'
             )
-            vae_model.save_model(save_dir)
+            vae_model.save(save_dir)
             logger.info(f'***SAVING***\t Epoch {epoch}, saved model.')
         if _iter and _iter % eval_interval == 0:
-            latent_z = torch.randn(
-                1,
-                mu.shape[0],  # batch_size
-                mu.shape[1]  # latent size
-            ).to(device)
+            latent_z = torch.randn(1, mu.shape[0], mu.shape[1]).to(device)
             molecule_iter = vae_model.generate(
                 latent_z,
                 prime_input=torch.tensor([2]),
                 end_token=torch.tensor([3]),
                 generate_len=generate_len,
-                temperature=temperature
+                search=search
             )
             smiles_language.token_indexes_to_smiles(
                 next(molecule_iter).tolist()
@@ -196,7 +191,7 @@ def train_vae(
                         'ep_loss': epoch
                     }
                 )
-                vae_model.save_model(
+                vae_model.save(
                     os.path.join(model_dir, f'weights/best_loss.pt')
                 )
                 logger.info(
@@ -206,9 +201,7 @@ def train_vae(
 
             if test_rec < loss_tracker['test_rec_a']:
                 loss_tracker.update({'test_rec_a': test_rec, 'ep_rec': epoch})
-                vae_model.save_model(
-                    os.path.join(model_dir, f'weights/best_rec.pt')
-                )
+                vae_model.save(os.path.join(model_dir, f'weights/best_rec.pt'))
                 logger.info(
                     f'Epoch {epoch}. NEW best reconstruction loss = '
                     f'{test_rec:.4f} \t (Loss = {test_loss:.4f}, KLD = '
@@ -216,12 +209,10 @@ def train_vae(
                 )
             if test_kld < loss_tracker['test_kld_a']:
                 loss_tracker.update({'test_kld_a': test_kld, 'ep_kld': epoch})
-                vae_model.save_model(
-                    os.path.join(model_dir, f'weights/best_kld.pt')
-                )
+                vae_model.save(os.path.join(model_dir, f'weights/best_kld.pt'))
                 logger.info(
                     f'Epoch {epoch}. NEW best KLD = {test_kld:.4f} \t (loss '
-                    '= {test_loss:.4f}, Reconstruction = {test_rec:.4f}).'
+                    f'= {test_loss:.4f}, Reconstruction = {test_rec:.4f}).'
                 )
             with open(os.path.join(model_dir, 'loss_tracker.json'), 'w') as fp:
                 json.dump(loss_tracker, fp)

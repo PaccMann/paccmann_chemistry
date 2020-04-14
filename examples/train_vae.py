@@ -6,11 +6,14 @@ import logging
 import os
 import sys
 from time import time
+import rdkit.rdBase as rkrb
+import rdkit.RDLogger as rkl
 from paccmann_chemistry.utils import collate_fn, get_device
 from paccmann_chemistry.models.vae import (
     StackGRUDecoder, StackGRUEncoder, TeacherVAE
 )
 from paccmann_chemistry.models.training import train_vae
+from paccmann_chemistry.utils.hyperparams import SEARCH_FACTORY
 from pytoda.datasets import SMILESDataset
 from pytoda.smiles.smiles_language import SMILESLanguage
 import torch
@@ -18,6 +21,16 @@ import torch
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger('training_vae')
+
+
+def disable_rdkit_logging():
+    """
+    Disables RDKit whiny logging.
+    """
+    logger = rkl.logger()
+    logger.setLevel(rkl.ERROR)
+    rkrb.DisableLog('rdApp.error')
+
 
 # yapf: disable
 parser = argparse.ArgumentParser(description='Chemistry VAE training script.')
@@ -50,6 +63,7 @@ parser.add_argument(
 
 def main(parser_namespace):
     try:
+        disable_rdkit_logging()
         # read the params json
         params = dict()
         with open(parser_namespace.params_filepath) as f:
@@ -75,13 +89,10 @@ def main(parser_namespace):
         # Load SMILES language
         smiles_language = SMILESLanguage.load(smiles_language_filepath)
 
-        params.update(
-            {
-                'input_size': smiles_language.number_of_tokens,
-                'output_size': smiles_language.number_of_tokens,
-                'pad_index': smiles_language.padding_index
-            }
-        )
+        params.update({
+            'vocab_size': smiles_language.number_of_tokens,
+            'pad_index': smiles_language.padding_index
+        })  # yapf:disable
 
         # create SMILES eager dataset
         smiles_train_data = SMILESDataset(
@@ -110,6 +121,10 @@ def main(parser_namespace):
                     [list(vocab_dict.values()).index('<STOP>')]
             }
         )
+        # Update the smiles_vocabulary size
+        if not params.get('embedding', 'learned') == 'pretrained':
+            params.update({'vocab_size': smiles_language.number_of_tokens})
+
         with open(os.path.join(model_dir, 'model_params.json'), 'w') as fp:
             json.dump(params, fp)
 
@@ -149,6 +164,13 @@ def main(parser_namespace):
         logger.info(
             'Model creation and data processing done, Training starts.'
         )
+        decoder_search = SEARCH_FACTORY[
+            params.get('decoder_search', 'sampling')
+        ](
+            temperature=params.get('temperature', 1.),
+            beam_width=params.get('beam_width', 3),
+            top_tokens=params.get('top_tokens', 5)
+        )  # yapf: disable
 
         for epoch in range(params['epochs'] + 1):
             t = time()
@@ -159,7 +181,8 @@ def main(parser_namespace):
                 test_data_loader,
                 smiles_language,
                 model_dir,
-                optimizer=params.get('optimizer', 'Adadelta'),
+                search=decoder_search,
+                optimizer=params.get('optimizer', 'adadelta'),
                 lr=params['learning_rate'],
                 kl_growth=params['kl_growth'],
                 input_keep=params['input_keep'],
@@ -167,7 +190,6 @@ def main(parser_namespace):
                 start_index=params['start_index'],
                 end_index=params['end_index'],
                 generate_len=params['generate_len'],
-                temperature=params['temperature'],
                 log_interval=params['log_interval'],
                 save_interval=params['save_interval'],
                 eval_interval=params['eval_interval'],
