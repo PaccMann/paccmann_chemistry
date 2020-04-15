@@ -76,6 +76,19 @@ class StackGRUEncoder(StackGRU):
                 `[1, batch_size, latent_dim]`.
         """
 
+        def _manage_packed_vars(final_hidden, hidden, batch_size, prev_batch):
+            if batch_size < prev_batch:
+                finished_lines = prev_batch - batch_size
+                break_index = hidden.shape[1] - finished_lines.item()
+                finished_slice = slice(break_index, hidden.shape[1])
+                # Hidden shape: num_layers, batch, cell_size ?
+                final_hidden[:, finished_slice, :] = hidden[:,
+                                                            finished_slice, :]
+                hidden = hidden[:, :break_index, :]
+
+                prev_batch = batch_size
+            return final_hidden, hidden, prev_batch
+
         # Forward pass
         hidden = self.init_hidden()
         stack = self.init_stack()
@@ -86,26 +99,16 @@ class StackGRUEncoder(StackGRU):
         # TODO Temp
         self._packed_inputs = True
         if self._packed_inputs:
-            input_seq, batch_sizes = self.perpare_packed_input(input_seq)
+            input_seq_packed, batch_sizes = self.perpare_packed_input(
+                input_seq
+            )
         prev_batch = batch_sizes[0]
-        finished_lines = 0
 
-        # TODO this will break now without hte packed mode
-        for input_entry, batch_size in zip(input_seq, batch_sizes):
-            if batch_size < prev_batch:
-                finished_lines = prev_batch - batch_size
-                break_index = hidden.shape[1] - finished_lines.item()
-                finished_slice = slice(break_index, hidden.shape[1])
-                # Hidden shape: num_layers, batch, cell_size ?
-                final_hidden[:, finished_slice, :] = hidden[:,
-                                                            finished_slice, :]
-                hidden = hidden[:, :break_index, :]
-                # Stack shape: batch, stack width, stack len
-                final_stack[finished_slice, :, :] = stack[finished_slice, :, :]
-                stack = stack[:break_index, :, :]
-
-                prev_batch = batch_size
-
+        # TODO this will break now without the packed mode
+        for input_entry, batch_size in zip(input_seq_packed, batch_sizes):
+            final_hidden, hidden, prev_batch = _manage_packed_vars(
+                final_hidden, hidden, batch_size, prev_batch
+            )
             output, hidden, stack = self(input_entry, hidden, stack)
 
         if self._packed_inputs:
@@ -119,19 +122,51 @@ class StackGRUEncoder(StackGRU):
 
         # Backward pass:
         if self.bidirectional:
-            assert len(input_seq.shape) == 2, 'Input Seq must be 2D Tensor.'
+            # assert len(input_seq.shape) == 2, 'Input Seq must be 2D Tensor.'
             hidden_backward = self.backward_stackgru.init_hidden()
             stack_backward = self.backward_stackgru.init_stack()
 
+            if self._packed_inputs:
+
+                input_seq = self.unpack_sequence(input_seq)
+
+                # REVIEW Idk if this is fast or slow, but I think that it's
+                # alright to go to list and reverse it there. Also, right now
+                # were okay with breaking hte graph, as this should be the
+                # first step on the entire graph, however it may break the
+                # entire thing in other situations (e.g. if the ebedding is
+                # done before hand)
+                input_seq = [torch.tensor(x.tolist()[::-1]) for x in input_seq]
+
+                input_seq = self.repack_sequence(input_seq)
+                input_seq_packed, batch_sizes = self.perpare_packed_input(
+                    input_seq
+                )
             # [::-1] not yet implemented in torch.
             # We roll up time from end to start
-            for input_entry_idx in range(len(input_seq) - 1, -1, -1):
+            # TODO  WIP I am for now getting rid of this:
+            #           #range(len(input_seq) - 1, -1, -1):
+
+            final_hidden = hidden_backward.detach().clone()
+            prev_batch = batch_sizes[0]
+
+            for input_entry, batch_size in zip(input_seq_packed, batch_sizes):
+                # for seq in input_seq:
+                (final_hidden, hidden_backward,
+                 prev_batch) = _manage_packed_vars(
+                     final_hidden, hidden_backward, batch_size, prev_batch
+                 )
                 output_backward, hidden_backward, stack_backward = (
                     self.backward_stackgru(
-                        input_seq[input_entry_idx], hidden_backward,
-                        stack_backward
+                        input_entry, hidden_backward, stack_backward
                     )
                 )
+            if self._packed_inputs:
+                left_dims = hidden_backward.shape[1]
+                final_hidden[:, :left_dims, :] = hidden_backward[:, :
+                                                                 left_dims, :]
+                hidden_backward = final_hidden
+
             # Concatenate forward and backward
             hidden_backward = self._post_gru_reshape(hidden_backward)
             hidden = torch.cat([hidden, hidden_backward], axis=1)
@@ -140,6 +175,15 @@ class StackGRUEncoder(StackGRU):
         logvar = self.hidden_to_logvar(hidden)
 
         return mu, logvar
+
+    @staticmethod
+    def unpack_sequence(seq):
+        tensor_seqs, seq_lens = torch.nn.utils.rnn.pad_packed_sequence(seq)
+        return [s[:l] for s, l in zip(tensor_seqs.unbind(dim=1), seq_lens)]
+
+    @staticmethod
+    def repack_sequence(seq):
+        return torch.nn.utils.rnn.pack_sequence(seq)
 
     def perpare_packed_input(self, input):
         batch_sizes = input.batch_sizes
