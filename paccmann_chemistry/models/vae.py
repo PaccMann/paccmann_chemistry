@@ -79,9 +79,42 @@ class StackGRUEncoder(StackGRU):
         # Forward pass
         hidden = self.init_hidden()
         stack = self.init_stack()
-        for input_entry in input_seq:
+
+        final_hidden = hidden.detach().clone()
+        final_stack = stack.detach().clone()
+
+        # TODO Temp
+        self._packed_inputs = True
+        if self._packed_inputs:
+            input_seq, batch_sizes = self.perpare_packed_input(input_seq)
+        prev_batch = batch_sizes[0]
+        finished_lines = 0
+
+        # TODO this will break now without hte packed mode
+        for input_entry, batch_size in zip(input_seq, batch_sizes):
+            if batch_size < prev_batch:
+                finished_lines = prev_batch - batch_size
+                break_index = hidden.shape[1] - finished_lines.item()
+                finished_slice = slice(break_index, hidden.shape[1])
+                # Hidden shape: num_layers, batch, cell_size ?
+                final_hidden[:, finished_slice, :] = hidden[:,
+                                                            finished_slice, :]
+                hidden = hidden[:, :break_index, :]
+                # Stack shape: batch, stack width, stack len
+                final_stack[finished_slice, :, :] = stack[finished_slice, :, :]
+                stack = stack[:break_index, :, :]
+
+                prev_batch = batch_size
+
             output, hidden, stack = self(input_entry, hidden, stack)
 
+        if self._packed_inputs:
+            left_dims = hidden.shape[1]
+            final_hidden[:, :left_dims, :] = hidden[:, :left_dims, :]
+            final_stack[:left_dims, :, :] = stack[:left_dims, :, :]
+
+            hidden = final_hidden
+            stack = final_stack
         hidden = self._post_gru_reshape(hidden)
 
         # Backward pass:
@@ -107,6 +140,17 @@ class StackGRUEncoder(StackGRU):
         logvar = self.hidden_to_logvar(hidden)
 
         return mu, logvar
+
+    def perpare_packed_input(self, input):
+        batch_sizes = input.batch_sizes
+        data = []
+        prev_size = 0
+        for batch in batch_sizes:
+            size = prev_size + batch
+            data.append(input.data[prev_size:size])
+            prev_size = size
+
+        return data, batch_sizes
 
     def _post_gru_reshape(self, hidden: torch.Tensor) -> torch.Tensor:
         expected_shape = torch.tensor(
