@@ -121,6 +121,7 @@ def train_vae(
     optimizer = OPTIMIZER_FACTORY[optimizer](vae_model.parameters(), lr=lr)
     t = time()
     for _iter, batch in enumerate(train_dataloader):
+
         global_step = (epoch - 1) * len(train_dataloader) + _iter
         padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
         padded_batch = padded_batch.to(device)
@@ -142,6 +143,11 @@ def train_vae(
         )
         loss.backward()
         train_loss += loss.detach().item()
+        # for name, param in vae_model.named_parameters():
+        #     if param.grad is None:
+        #         print(name)
+        #         print(param.grad)
+
         optimizer.step()
         torch.cuda.empty_cache()
         if _iter and _iter % log_interval == 0:

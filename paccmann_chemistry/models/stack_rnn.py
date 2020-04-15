@@ -81,7 +81,14 @@ class StackGRU(nn.Module):
             bidirectional=False,
             dropout=params['dropout']
         )
+        # TODO: Move as much as we can into constructor.
+
+        # TODO: IN constructor only use .data_field
+
+        # TODO: Move this out to stack GRU decoder
         self.output_layer = nn.Linear(self.rnn_cell_size, self.vocab_size)
+
+        # TODO: Move to TeacherVAE class or to training.py
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = OPTIMIZER_FACTORY[
             params.get('optimizer', 'adadelta')
@@ -185,39 +192,6 @@ class StackGRU(nn.Module):
             batch_size = self.batch_size
         result = torch.zeros(batch_size, self.stack_depth, self.stack_width)
         return Variable(result.to(self.device))
-
-    def train_step(self, input_seq, target_seq):
-        """
-        The train step method.
-
-        Args:
-            input_seq (torch.Tensor): Padded tensor of indices for a batch of
-                input sequences. Must be of shape
-                `[max batch sequence length +1, batch_size]`.
-            target_seq (torch.Tensor): Padded tensor of indices for a batch of
-                target sequences. Must be of shape
-                `[max batch sequence length +1, batch_size]`.
-
-        Note: Input and target sequences are outputs of
-            sequential_data_preparation(batch) with batches returned by a
-            DataLoader object.
-
-        Returns:
-            float: Average loss for all sequence steps.
-        """
-        hidden = self.init_hidden()
-        stack = self.init_stack()
-        self.zero_grad()
-        loss = 0
-        for input_entry, target_entry in zip(input_seq, target_seq):
-            output, hidden, stack = self(input_entry, hidden, stack)
-            loss += self.criterion(
-                output, torch.LongTensor(target_entry.squeeze().numpy())
-            )
-        loss.backward()
-        self.optimizer.step()
-
-        return loss.item() / len(input_seq)
 
     def _check_params(self):
         """

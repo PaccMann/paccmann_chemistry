@@ -159,9 +159,9 @@ def main(parser_namespace):
         gru_encoder = StackGRUEncoder(params).to(device)
         gru_decoder = StackGRUDecoder(params).to(device)
         gru_vae = TeacherVAE(gru_encoder, gru_decoder).to(device)
-        logger.info('****MODEL SUMMARY***\n')
+        logger.info('\n****MODEL SUMMARY***\n')
         for name, parameter in gru_vae.named_parameters():
-            logger.info(f'Param {name}\t, shape: {parameter.shape}')
+            logger.info(f'Param {name}, shape:\t{parameter.shape}')
         total_params = sum(p.numel() for p in gru_vae.parameters())
         logger.info(f'Total # params: {total_params}')
 
