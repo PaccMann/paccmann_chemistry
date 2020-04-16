@@ -123,8 +123,10 @@ class StackGRUEncoder(StackGRU):
 
                 input_seq = utils.unpack_sequence(input_seq)
 
-                # TODO Change as proposed in the pull draft!!!
-                input_seq = [torch.tensor(x.tolist()[::-1]) for x in input_seq]
+                for i, seq in enumerate(input_seq):
+                    idx = [i for i in range(len(seq) - 1, -1, -1)]
+                    idx = torch.LongTensor(idx)
+                    input_seq[i] = seq.index_select(0, idx)
 
                 input_seq = utils.repack_sequence(input_seq)
                 input_seq_packed, batch_sizes = utils.perpare_packed_input(
