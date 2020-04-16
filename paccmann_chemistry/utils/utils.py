@@ -152,6 +152,38 @@ def collate_fn(batch):
     ]
 
 
+def unpack_sequence(seq):
+    tensor_seqs, seq_lens = torch.nn.utils.rnn.pad_packed_sequence(seq)
+    return [s[:l] for s, l in zip(tensor_seqs.unbind(dim=1), seq_lens)]
+
+
+def repack_sequence(seq):
+    return torch.nn.utils.rnn.pack_sequence(seq)
+
+
+def perpare_packed_input(input):
+    batch_sizes = input.batch_sizes
+    data = []
+    prev_size = 0
+    for batch in batch_sizes:
+        size = prev_size + batch
+        data.append(input.data[prev_size:size])
+        prev_size = size
+    return data, batch_sizes
+
+def manage_step_packed_vars(final_hidden, hidden, batch_size, prev_batch):
+    if batch_size < prev_batch:
+        finished_lines = prev_batch - batch_size
+        break_index = hidden.shape[1] - finished_lines.item()
+        finished_slice = slice(break_index, hidden.shape[1])
+        # Hidden shape: num_layers, batch, cell_size ?
+        final_hidden[:, finished_slice, :] = hidden[:, finished_slice, :]
+        hidden = hidden[:, :break_index, :]
+
+        prev_batch = batch_size
+    return final_hidden, hidden, prev_batch
+
+
 def kl_weight(step, growth_rate=0.004):
     """Kullback-Leibler weighting function.
 

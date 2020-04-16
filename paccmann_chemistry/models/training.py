@@ -34,15 +34,23 @@ def test_vae(model, dataloader, logger, input_keep):
                 logger.info(
                     f'**TESTING**\t Processing batch {_iter}/{len(dataloader)}'
                 )
-            padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
-            padded_batch = padded_batch.to(device)
-            encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
-                padded_batch,
-                input_keep=input_keep,
-                start_index=dataloader.dataset.smiles_language.start_index,
-                end_index=dataloader.dataset.smiles_language.stop_index,
-                dropout_index=dataloader.dataset.smiles_language.unknown_index
-            )
+            # padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
+            # padded_batch = padded_batch.to(device)
+            # encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
+            #     padded_batch,
+            #     input_keep=input_keep,
+            #     start_index=2,
+            #     end_index=3
+            # )
+
+            # WIP: We will use packed sequences instead of padded sequences
+            (encoder_seq, decoder_seq,
+             target_seq) = packed_sequential_data_preparation(
+                 batch,
+                 input_keep=input_keep,
+                 start_index=2,
+                 end_index=3
+             )
 
             decoder_loss, mu, logvar = vae_model(
                 encoder_seq, decoder_seq, target_seq
