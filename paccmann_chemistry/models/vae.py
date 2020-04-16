@@ -95,10 +95,14 @@ class StackGRUEncoder(StackGRU):
 
         # TODO this will break now without the packed mode
         for input_entry, batch_size in zip(input_seq_packed, batch_sizes):
-            final_hidden, hidden, prev_batch = utils.manage_step_packed_vars(
-                final_hidden, hidden, batch_size, prev_batch
+            final_hidden, hidden = utils.manage_step_packed_vars(
+                final_hidden, hidden, batch_size, prev_batch, batch_dim=1
+            )
+            final_stack, stack = utils.manage_step_packed_vars(
+                final_stack, stack, batch_size, prev_batch, batch_dim=0
             )
             output, hidden, stack = self(input_entry, hidden, stack)
+            prev_batch = batch_size
 
         if self._packed_inputs:
             left_dims = hidden.shape[1]
@@ -136,10 +140,21 @@ class StackGRUEncoder(StackGRU):
 
             for input_entry, batch_size in zip(input_seq_packed, batch_sizes):
                 # for seq in input_seq:
-                (final_hidden, hidden_backward,
-                 prev_batch) = utils.manage_step_packed_vars(
-                     final_hidden, hidden_backward, batch_size, prev_batch
-                 )
+                final_hidden, hidden_backward = utils.manage_step_packed_vars(
+                    final_hidden,
+                    hidden_backward,
+                    batch_size,
+                    prev_batch,
+                    batch_dim=1
+                )
+                final_stack, stack_backward = utils.manage_step_packed_vars(
+                    final_stack,
+                    stack_backward,
+                    batch_size,
+                    prev_batch,
+                    batch_dim=0
+                )
+                prev_batch = batch_size
                 output_backward, hidden_backward, stack_backward = (
                     self.backward_stackgru(
                         input_entry, hidden_backward, stack_backward
@@ -247,14 +262,16 @@ class StackGRUDecoder(StackGRU):
             input_seq_packed, _ = utils.perpare_packed_input(target_seq)
         prev_batch = batch_sizes[0]
 
-        final_hidden = hidden.detach().clone(
-        )  # Do I actually need this? I think not...
         for input_entry, target_entry, batch_size in zip(
             input_seq_packed, input_seq_packed, batch_sizes
         ):
-            final_hidden, hidden, prev_batch = utils.manage_step_packed_vars(
-                final_hidden, hidden, batch_size, prev_batch
+            _, hidden = utils.manage_step_packed_vars(
+                None, hidden, batch_size, prev_batch, batch_dim=1
             )
+            _, stack = utils.manage_step_packed_vars(
+                None, stack, batch_size, prev_batch, batch_dim=0
+            )
+            prev_batch = batch_size
             output, hidden, stack = self(
                 input_entry.unsqueeze(0), hidden, stack
             )

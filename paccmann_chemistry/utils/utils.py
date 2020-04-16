@@ -171,17 +171,25 @@ def perpare_packed_input(input):
         prev_size = size
     return data, batch_sizes
 
-def manage_step_packed_vars(final_hidden, hidden, batch_size, prev_batch):
+
+def manage_step_packed_vars(final_var, var, batch_size, prev_batch, batch_dim):
     if batch_size < prev_batch:
         finished_lines = prev_batch - batch_size
-        break_index = hidden.shape[1] - finished_lines.item()
-        finished_slice = slice(break_index, hidden.shape[1])
-        # Hidden shape: num_layers, batch, cell_size ?
-        final_hidden[:, finished_slice, :] = hidden[:, finished_slice, :]
-        hidden = hidden[:, :break_index, :]
+        break_index = var.shape[batch_dim] - finished_lines.item()
+        finished_slice = slice(break_index, var.shape[batch_dim])
+        # var shape: num_layers, batch, cell_size ?
+        if batch_dim == 0:
+            if final_var is not None:
+                final_var[finished_slice, :, :] = var[finished_slice, :, :]
+            var = var[:break_index, :, :]    
+        elif batch_dim == 1:
+            if final_var is not None:
+                final_var[:, finished_slice, :] = var[:, finished_slice, :]
+            var = var[:, :break_index, :]
+        else:
+            raise ValueError('Allowed batch dim are 1 and 2')
 
-        prev_batch = batch_size
-    return final_hidden, hidden, prev_batch
+    return final_var, var
 
 
 def kl_weight(step, growth_rate=0.004):
