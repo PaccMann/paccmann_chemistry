@@ -129,6 +129,7 @@ class StackGRUEncoder(StackGRU):
             # Concatenate forward and backward
             hidden_backward = self._post_gru_reshape(hidden_backward)
             hidden = torch.cat([hidden, hidden_backward], axis=1)
+        return hidden
 
     def _forward_pass_packed(self, input_seq, hidden, stack):
         """

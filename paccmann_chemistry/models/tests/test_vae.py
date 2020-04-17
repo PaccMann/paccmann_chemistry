@@ -32,7 +32,8 @@ class TestStackGRUEncoder(unittest.TestCase):
         'n_layers': 3,
         'dropout': .7,
         'batch_size': 32,
-        'bidirectional': True
+        'bidirectional': True,
+        'batch_mode': 'padded'
     }
 
     def assertListsClose(self, var1, var2, rtol=1e-5, atol=1e-7):
