@@ -61,6 +61,32 @@ class StackGRUEncoder(StackGRU):
     def encoder_train_step(self, input_seq):
         """
         The Encoder Train Step.
+        Args:
+            input_seq (torch.Tensor): the sequence of indices for the input
+            of shape `[max batch sequence length +1, batch_size]`, where +1 is
+            for the added start_index.
+        Note: Input_seq is an output of sequential_data_preparation(batch) with
+            batches returned by a DataLoader object.
+        Returns:
+            (torch.Tensor, torch.Tensor): mu, logvar
+            mu is the latent mean of shape `[1, batch_size, latent_dim]`.
+            logvar is the log of the latent variance of shape
+                `[1, batch_size, latent_dim]`.
+        """
+        # Forward pass
+        hidden = self.init_hidden()
+        stack = self.init_stack()
+
+        hidden = self._forward_fn(input_seq, hidden, stack)
+
+        mu = self.hidden_to_mu(hidden)
+        logvar = self.hidden_to_logvar(hidden)
+
+        return mu, logvar
+
+    def _forward_pass_padded(self, input_seq, hidden, stack):
+        """
+        The Encoder Train Step.
 
         Args:
             input_seq (torch.Tensor): the sequence of indices for the input
@@ -77,44 +103,74 @@ class StackGRUEncoder(StackGRU):
             logvar is the log of the latent variance of shape
                 `[1, batch_size, latent_dim]`.
         """
-        _packed_inputs = False
-        if isinstance(input_seq, nn.utils.rnn.PackedSequence):
-            _packed_inputs = True
-        # Forward pass
-        hidden = self.init_hidden()
-        stack = self.init_stack()
-
-        _iterator = input_seq
-        if _packed_inputs:
-            final_hidden = hidden.detach().clone()
-            final_stack = stack.detach().clone()
-            input_seq_packed, batch_sizes = utils.perpare_packed_input(
-                input_seq
-            )
-            _iterator = zip(input_seq_packed, batch_sizes)
-
-            prev_batch = batch_sizes[0]
-
-        # TODO this will break now without the packed mode
-        for input_entry in _iterator:
-            if _packed_inputs:
-                input_entry, batch_size = input_entry
-                final_hidden, hidden = utils.manage_step_packed_vars(
-                    final_hidden, hidden, batch_size, prev_batch, batch_dim=1
-                )
-                final_stack, stack = utils.manage_step_packed_vars(
-                    final_stack, stack, batch_size, prev_batch, batch_dim=0
-                )
-                prev_batch = batch_size
+        for input_entry in input_seq:
             output, hidden, stack = self(input_entry, hidden, stack)
 
-        if _packed_inputs:
-            left_dims = hidden.shape[1]
-            final_hidden[:, :left_dims, :] = hidden[:, :left_dims, :]
-            final_stack[:left_dims, :, :] = stack[:left_dims, :, :]
+        hidden = self._post_gru_reshape(hidden)
 
-            hidden = final_hidden
-            stack = final_stack
+        # Backward pass:
+        if self.bidirectional:
+            assert len(input_seq.shape) == 2, 'Input Seq must be 2D Tensor.'
+            hidden_backward = self.backward_stackgru.init_hidden()
+            stack_backward = self.backward_stackgru.init_stack()
+
+            # [::-1] not yet implemented in torch.
+            # We roll up time from end to start
+            for input_entry_idx in range(len(input_seq) - 1, -1, -1):
+                output_backward, hidden_backward, stack_backward = (
+                    self.backward_stackgru(
+                        input_seq[input_entry_idx], hidden_backward,
+                        stack_backward
+                    )
+                )
+            # Concatenate forward and backward
+            hidden_backward = self._post_gru_reshape(hidden_backward)
+            hidden = torch.cat([hidden, hidden_backward], axis=1)
+
+    def _forward_pass_packed(self, input_seq, hidden, stack):
+        """
+        The Encoder Train Step.
+
+        Args:
+            input_seq (torch.nn.utls.rnn.PackedSequence): the sequence of
+            indices for the input of shape.
+
+        Note: Input_seq is an output of sequential_data_preparation(batch) with
+            batches returned by a DataLoader object.
+
+        Returns:
+            (torch.Tensor, torch.Tensor): mu, logvar
+
+            mu is the latent mean of shape `[1, batch_size, latent_dim]`.
+            logvar is the log of the latent variance of shape
+                `[1, batch_size, latent_dim]`.
+        """
+        if not isinstance(input_seq, nn.utils.rnn.PackedSequence):
+            raise TypeError('Input is not PackedSequence')
+
+        final_hidden = hidden.detach().clone()
+        final_stack = stack.detach().clone()
+        input_seq_packed, batch_sizes = utils.perpare_packed_input(input_seq)
+
+        prev_batch = batch_sizes[0]
+
+        # TODO this will break now without the packed mode
+        for input_entry, batch_size in zip(input_seq_packed, batch_sizes):
+            final_hidden, hidden = utils.manage_step_packed_vars(
+                final_hidden, hidden, batch_size, prev_batch, batch_dim=1
+            )
+            final_stack, stack = utils.manage_step_packed_vars(
+                final_stack, stack, batch_size, prev_batch, batch_dim=0
+            )
+            prev_batch = batch_size
+            output, hidden, stack = self(input_entry, hidden, stack)
+
+        left_dims = hidden.shape[1]
+        final_hidden[:, :left_dims, :] = hidden[:, :left_dims, :]
+        final_stack[:left_dims, :, :] = stack[:left_dims, :, :]
+
+        hidden = final_hidden
+        stack = final_stack
         hidden = self._post_gru_reshape(hidden)
 
         # Backward pass:
@@ -123,19 +179,17 @@ class StackGRUEncoder(StackGRU):
             hidden_backward = self.backward_stackgru.init_hidden()
             stack_backward = self.backward_stackgru.init_stack()
 
-            if self._packed_inputs:
+            input_seq = utils.unpack_sequence(input_seq)
 
-                input_seq = utils.unpack_sequence(input_seq)
+            for i, seq in enumerate(input_seq):
+                idx = [i for i in range(len(seq) - 1, -1, -1)]
+                idx = torch.LongTensor(idx)
+                input_seq[i] = seq.index_select(0, idx)
 
-                for i, seq in enumerate(input_seq):
-                    idx = [i for i in range(len(seq) - 1, -1, -1)]
-                    idx = torch.LongTensor(idx)
-                    input_seq[i] = seq.index_select(0, idx)
-
-                input_seq = utils.repack_sequence(input_seq)
-                input_seq_packed, batch_sizes = utils.perpare_packed_input(
-                    input_seq
-                )
+            input_seq = utils.repack_sequence(input_seq)
+            input_seq_packed, batch_sizes = utils.perpare_packed_input(
+                input_seq
+            )
 
             final_hidden = hidden_backward.detach().clone()
             prev_batch = batch_sizes[0]
@@ -162,20 +216,14 @@ class StackGRUEncoder(StackGRU):
                         input_entry, hidden_backward, stack_backward
                     )
                 )
-            if self._packed_inputs:
-                left_dims = hidden_backward.shape[1]
-                final_hidden[:, :left_dims, :] = hidden_backward[:, :
-                                                                 left_dims, :]
-                hidden_backward = final_hidden
+            left_dims = hidden_backward.shape[1]
+            final_hidden[:, :left_dims, :] = hidden_backward[:, :left_dims, :]
+            hidden_backward = final_hidden
 
             # Concatenate forward and backward
             hidden_backward = self._post_gru_reshape(hidden_backward)
             hidden = torch.cat([hidden, hidden_backward], axis=1)
-
-        mu = self.hidden_to_mu(hidden)
-        logvar = self.hidden_to_logvar(hidden)
-
-        return mu, logvar
+        return hidden
 
     def _post_gru_reshape(self, hidden: torch.Tensor) -> torch.Tensor:
         expected_shape = torch.tensor(
@@ -252,16 +300,46 @@ class StackGRUDecoder(StackGRU):
         """
         hidden = self.latent_to_hidden(latent_z)
         stack = self.init_stack()
+
+        loss = self._forward_fn(input_seq, target_seq, hidden, stack)
+        return loss
+
+    def _forward_pass_padded(self, input_seq, target_seq, hidden, stack):
+        """The Decoder Train Step.
+
+        Note: Input and target sequences are outputs of
+            sequential_data_preparation(batch) with batches returned by
+            a DataLoader object.
+        Returns:
+            The cross-entropy training loss for the decoder.
+        """
         loss = 0
         outputs = []
-        # TODO Refactor this
-        self._packed_inputs = True
-        if self._packed_inputs:
-            input_seq_packed, batch_sizes = utils.perpare_packed_input(
-                input_seq
+        for input_entry, target_entry in zip(input_seq, target_seq):
+            output, hidden, stack = self(
+                input_entry.unsqueeze(0), hidden, stack
             )
-            # Target sequence should have same batch_sizes as input_seq
-            input_seq_packed, _ = utils.perpare_packed_input(target_seq)
+            loss += self.criterion(output, target_entry.squeeze())
+            outputs.append(output)
+
+        # For monitoring purposes
+        outputs = torch.argmax(torch.stack(outputs, -1), 1)
+
+        return loss
+
+    def _forward_pass_packed(self, input_seq, target_seq, hidden, stack):
+        """The Decoder Train Step.
+
+        Note: Input and target sequences are outputs of
+            sequential_data_preparation(batch) with batches returned by a
+            DataLoader object.
+        Returns:
+            The cross-entropy training loss for the decoder.
+        """
+        loss = 0
+        input_seq_packed, batch_sizes = utils.perpare_packed_input(input_seq)
+        # Target sequence should have same batch_sizes as input_seq
+        input_seq_packed, _ = utils.perpare_packed_input(target_seq)
         prev_batch = batch_sizes[0]
 
         for input_entry, target_entry, batch_size in zip(
@@ -277,6 +355,10 @@ class StackGRUDecoder(StackGRU):
             output, hidden, stack = self(
                 input_entry.unsqueeze(0), hidden, stack
             )
+            # TODO Check that the shapes are all correct
+            if len(output.shape) < 2:
+                output = output.unsqueeze(0)
+            loss += self.criterion(output, target_entry)
             outputs.append(output)
 
         # For monitoring purposes

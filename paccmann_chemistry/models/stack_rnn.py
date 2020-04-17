@@ -94,6 +94,8 @@ class StackGRU(nn.Module):
             params.get('optimizer', 'adadelta')
         ](self.parameters(), lr=params.get('lr', 0.01))  # yapf: disable
 
+        self.set_batch_mode(params.get('batch_mode'))
+
         self._check_params()
 
     def forward(self, input_token, hidden, stack):
@@ -131,6 +133,36 @@ class StackGRU(nn.Module):
         output, hidden = self.gru(inp, hidden)
         output = self.output_layer(output).squeeze()
         return output, hidden, stack
+
+    def _forward_fn(self, input_seq, hidden, stack):
+        raise NotImplementedError
+
+    def _forward_pass_padded(self, *args):
+        raise NotImplementedError
+
+    def _forward_pass_packed(self, *args):
+        raise NotImplementedError
+
+    def set_batch_mode(self, mode):
+        """Select forward function mode
+
+        Args:
+            mode (str): Mode to use. Available modes:
+                `padded`, `packed`
+
+        """
+        if not isinstance(mode, str):
+            raise TypeError('Argument `mode` should be a string.')
+        mode = mode.capitalize()
+        MODES = {
+            'Padded': self._forward_pass_padded,
+            'Packed': self._forward_pass_packed
+        }
+        if mode not in MODES:
+            raise NotImplementedError(
+                f'Unknown mode: {mode}. Available modes: {MODES.keys()}'
+            )
+        self._forward_fn = MODES[mode]
 
     def _stack_update(self, embedded_input, hidden, stack):
         """Pre-gru stack update operations"""
