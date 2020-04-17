@@ -77,34 +77,38 @@ class StackGRUEncoder(StackGRU):
             logvar is the log of the latent variance of shape
                 `[1, batch_size, latent_dim]`.
         """
+        _packed_inputs = False
+        if isinstance(input_seq, nn.utils.rnn.PackedSequence):
+            _packed_inputs = True
         # Forward pass
         hidden = self.init_hidden()
         stack = self.init_stack()
 
-        final_hidden = hidden.detach().clone()
-        final_stack = stack.detach().clone()
-
-        # TODO Temp: Make this into a fn
-        self._packed_inputs = True
-        if self._packed_inputs:
+        _iterator = input_seq
+        if _packed_inputs:
+            final_hidden = hidden.detach().clone()
+            final_stack = stack.detach().clone()
             input_seq_packed, batch_sizes = utils.perpare_packed_input(
                 input_seq
             )
+            _iterator = zip(input_seq_packed, batch_sizes)
 
-        prev_batch = batch_sizes[0]
+            prev_batch = batch_sizes[0]
 
         # TODO this will break now without the packed mode
-        for input_entry, batch_size in zip(input_seq_packed, batch_sizes):
-            final_hidden, hidden = utils.manage_step_packed_vars(
-                final_hidden, hidden, batch_size, prev_batch, batch_dim=1
-            )
-            final_stack, stack = utils.manage_step_packed_vars(
-                final_stack, stack, batch_size, prev_batch, batch_dim=0
-            )
+        for input_entry in _iterator:
+            if _packed_inputs:
+                input_entry, batch_size = input_entry
+                final_hidden, hidden = utils.manage_step_packed_vars(
+                    final_hidden, hidden, batch_size, prev_batch, batch_dim=1
+                )
+                final_stack, stack = utils.manage_step_packed_vars(
+                    final_stack, stack, batch_size, prev_batch, batch_dim=0
+                )
+                prev_batch = batch_size
             output, hidden, stack = self(input_entry, hidden, stack)
-            prev_batch = batch_size
 
-        if self._packed_inputs:
+        if _packed_inputs:
             left_dims = hidden.shape[1]
             final_hidden[:, :left_dims, :] = hidden[:, :left_dims, :]
             final_stack[:left_dims, :, :] = stack[:left_dims, :, :]
@@ -132,10 +136,6 @@ class StackGRUEncoder(StackGRU):
                 input_seq_packed, batch_sizes = utils.perpare_packed_input(
                     input_seq
                 )
-            # [::-1] not yet implemented in torch.
-            # We roll up time from end to start
-            # TODO  WIP I am for now getting rid of this:
-            #           #range(len(input_seq) - 1, -1, -1):
 
             final_hidden = hidden_backward.detach().clone()
             prev_batch = batch_sizes[0]
