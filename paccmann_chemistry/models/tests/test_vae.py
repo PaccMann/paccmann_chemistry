@@ -276,6 +276,8 @@ class testTeacherVAE(unittest.TestCase):
                                     _call_fn(beam=True)
                         else:
                             _call_fn(beam=False)
+        self.assertTrue(True)
+
 
     def test_speed_pack_vs_pad(self):
         logger.info('\nTesting Pack vs Pad')
@@ -373,3 +375,4 @@ class testTeacherVAE(unittest.TestCase):
                             self.dec_t = time.time()
                             print(p['batch_mode'])
                             _log()
+        self.assertTrue(True)
