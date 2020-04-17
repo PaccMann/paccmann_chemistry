@@ -177,8 +177,9 @@ class testTeacherVAE(unittest.TestCase):
 
         def _log():
             logger.info(
-                f'Stack: {self.use_stack}, bidirectional'
-                f': {self.bidirectional}, layers: {self.n_layers}, batch_size:'
+                f'Stack: {self.use_stack}, bidirectional: {self.bidirectional}'
+                f' SeqLen:{self.gen_lens[1]}, '
+                f'layers: {self.n_layers}, batch_size:'
                 f' {self.bs}, RNN: {self.rnn}, Vocab: {self.vocab_size}\n'
                 f'Setup: {self.setup-self.start:.3f}, Encoder:'
                 f'{self.enc_t-self.setup:.3f}, Decoder: '
@@ -197,31 +198,31 @@ class testTeacherVAE(unittest.TestCase):
             )
 
         # # Run
-        # for self.use_stack in self.use_stacks:
-        #     for self.bidirectional in self.bidirectionals:
-        #         for self.n_layers in self.n_layerss:
-        #             for self.bs in self.batch_sizes:
-        #                 for self.rnn in self.rnns:
-        #                     for self.vocab_size in self.vocab_sizes:
+        for self.use_stack in self.use_stacks:
+            for self.bidirectional in self.bidirectionals:
+                for self.n_layers in self.n_layerss:
+                    for self.bs in self.batch_sizes:
+                        for self.rnn in self.rnns:
+                            for self.vocab_size in self.vocab_sizes:
 
-        #                         # Update params
-        #                         p = _update_params()
-        #                         enc_in = torch.rand(self.gen_len,
-        #                                             self.bs).long()
-        #                         lat = torch.rand(self.bs, p['latent_dim'])
-        #                         prime = torch.Tensor([2])
+                                # Update params
+                                p = _update_params()
+                                enc_in = torch.rand(self.gen_lens[1],
+                                                    self.bs).long()
+                                lat = torch.rand(self.bs, p['latent_dim'])
+                                prime = torch.Tensor([2])
 
-        #                         self.start = time.time()
-        #                         enc = StackGRUEncoder(p)
-        #                         dec = StackGRUDecoder(p)
-        #                         vae = TeacherVAE(enc, dec)
-        #                         self.setup = time.time()
+                                self.start = time.time()
+                                enc = StackGRUEncoder(p)
+                                dec = StackGRUDecoder(p)
+                                vae = TeacherVAE(enc, dec)
+                                self.setup = time.time()
 
-        #                         enc_out = enc.encoder_train_step(enc_in)
-        #                         self.enc_t = time.time()
-        #                         dec_out = vae.decode(lat, enc_in, enc_in)
-        #                         self.dec_t = time.time()
-        #                         _log()
+                                enc_out = enc.encoder_train_step(enc_in)
+                                self.enc_t = time.time()
+                                dec_out = vae.decode(lat, enc_in, enc_in)
+                                self.dec_t = time.time()
+                                _log()
 
         logger.info(f'***Decoder search tests***')
 
