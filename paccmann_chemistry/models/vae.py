@@ -103,6 +103,9 @@ class StackGRUEncoder(StackGRU):
             logvar is the log of the latent variance of shape
                 `[1, batch_size, latent_dim]`.
         """
+        if isinstance(input_seq, nn.utils.rnn.PackedSequence) or \
+                not isinstance(input_seq, torch.Tensor):
+            raise TypeError('Input is PackedSequence or is not a Tensor')
         for input_entry in input_seq:
             output, hidden, stack = self(input_entry, hidden, stack)
 
@@ -313,6 +316,10 @@ class StackGRUDecoder(StackGRU):
         Returns:
             The cross-entropy training loss for the decoder.
         """
+        if isinstance(input_seq, nn.utils.rnn.PackedSequence) and \
+                not isinstance(input_seq, torch.Tensor):
+            raise TypeError('Input is PackedSequence or is not a Tensor')
+
         loss = 0
         outputs = []
         for input_entry, target_entry in zip(input_seq, target_seq):
@@ -336,6 +343,9 @@ class StackGRUDecoder(StackGRU):
         Returns:
             The cross-entropy training loss for the decoder.
         """
+        if not isinstance(input_seq, nn.utils.rnn.PackedSequence):
+            raise TypeError('Input is not PackedSequence')
+
         loss = 0
         input_seq_packed, batch_sizes = utils.perpare_packed_input(input_seq)
         # Target sequence should have same batch_sizes as input_seq
