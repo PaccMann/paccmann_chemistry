@@ -12,6 +12,7 @@ from paccmann_chemistry.models.vae import (
 from paccmann_chemistry.utils.search import (
     SamplingSearch, GreedySearch, BeamSearch
 )
+from paccmann_chemistry.models.training import get_data_preparation
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger('test_vae')
@@ -160,6 +161,7 @@ class testTeacherVAE(unittest.TestCase):
     vocab_sizes = [100, 500]
     beam_sizes = [2, 8]
     top_tokenss = [5, 30]
+    batch_modes = ['Padded', 'Packed']
 
     def test_speed(self):
 
@@ -171,14 +173,16 @@ class testTeacherVAE(unittest.TestCase):
                     'n_layers': self.n_layers,
                     'batch_size': self.bs,
                     'rnn_cell_size': self.rnn,
-                    'vocab_size': self.vocab_size
+                    'vocab_size': self.vocab_size,
+                    'batch_mode': self.batch_mode
                 }
             )
             return self.params
 
         def _log():
             logger.info(
-                f'Stack: {self.use_stack}, bidirectional: {self.bidirectional}'
+                f'\tMode {self.batch_mode}, Stack: {self.use_stack}, '
+                f'bidirectional: {self.bidirectional}'
                 f' SeqLen:{self.gen_lens[1]}, '
                 f'layers: {self.n_layers}, batch_size:'
                 f' {self.bs}, RNN: {self.rnn}, Vocab: {self.vocab_size}\n'
@@ -199,31 +203,33 @@ class testTeacherVAE(unittest.TestCase):
             )
 
         # # Run
-        for self.use_stack in self.use_stacks:
-            for self.bidirectional in self.bidirectionals:
-                for self.n_layers in self.n_layerss:
-                    for self.bs in self.batch_sizes:
-                        for self.rnn in self.rnns:
-                            for self.vocab_size in self.vocab_sizes:
+        for self.batch_mode in self.batch_modes:
+            for self.use_stack in self.use_stacks:
+                for self.bidirectional in self.bidirectionals:
+                    for self.n_layers in self.n_layerss:
+                        for self.bs in self.batch_sizes:
+                            for self.rnn in self.rnns:
+                                for self.vocab_size in self.vocab_sizes:
 
-                                # Update params
-                                p = _update_params()
-                                enc_in = torch.rand(self.gen_lens[1],
-                                                    self.bs).long()
-                                lat = torch.rand(self.bs, p['latent_dim'])
-                                prime = torch.Tensor([2])
+                                    # Update params
+                                    p = _update_params()
+                                    enc_in = torch.rand(
+                                        self.gen_lens[1], self.bs
+                                    ).long()
+                                    lat = torch.rand(self.bs, p['latent_dim'])
+                                    prime = torch.Tensor([2])
 
-                                self.start = time.time()
-                                enc = StackGRUEncoder(p)
-                                dec = StackGRUDecoder(p)
-                                vae = TeacherVAE(enc, dec)
-                                self.setup = time.time()
+                                    self.start = time.time()
+                                    enc = StackGRUEncoder(p)
+                                    dec = StackGRUDecoder(p)
+                                    vae = TeacherVAE(enc, dec)
+                                    self.setup = time.time()
 
-                                enc_out = enc.encoder_train_step(enc_in)
-                                self.enc_t = time.time()
-                                dec_out = vae.decode(lat, enc_in, enc_in)
-                                self.dec_t = time.time()
-                                _log()
+                                    enc_out = enc.encoder_train_step(enc_in)
+                                    self.enc_t = time.time()
+                                    dec_out = vae.decode(lat, enc_in, enc_in)
+                                    self.dec_t = time.time()
+                                    _log()
 
         logger.info(f'***Decoder search tests***')
 
@@ -270,3 +276,100 @@ class testTeacherVAE(unittest.TestCase):
                                     _call_fn(beam=True)
                         else:
                             _call_fn(beam=False)
+
+    def test_speed_pack_vs_pad(self):
+        logger.info('\nTesting Pack vs Pad')
+
+        n_layerss = [2]
+        batch_sizes = [8, 128]
+        rnns = [8, 256]
+        vocab_sizes = [100]
+        batch_modes = ['Padded', 'Packed']
+
+        def _update_params():
+            self.params.update(
+                {
+                    'use_stack': self.use_stack,
+                    'bidirectional': self.bidirectional,
+                    'n_layers': self.n_layers,
+                    'batch_size': self.bs,
+                    'rnn_cell_size': self.rnn,
+                    'vocab_size': self.vocab_size,
+                    'batch_mode': self.batch_mode
+                }
+            )
+            return self.params
+
+        def _log():
+            logger.info(
+                f'\tMode {self.batch_mode}, Stack: {self.use_stack}, '
+                f'bidirectional: {self.bidirectional}'
+                f' SeqLen:{self.gen_lens[1]}, '
+                f'layers: {self.n_layers}, batch_size:'
+                f' {self.bs}, RNN: {self.rnn}, Vocab: {self.vocab_size}\n'
+                f'Setup: {self.setup-self.start:.3f}, '
+                f'Encoder: {self.enc_t-self.setup:.3f}, '
+                f'Reparam: {self.reparam_t - self.enc_t} '
+                f'Decoder: {self.dec_t-self.reparam_t:.3f}\n'
+            )
+
+        # # Run
+        self.use_stack = True
+        self.bidirectional = True
+        for self.batch_mode in batch_modes:
+            # for self.use_stack in self.use_stacks:
+            # for self.bidirectional in self.bidirectionals:
+            for self.n_layers in n_layerss:
+                for self.bs in batch_sizes:
+                    for self.rnn in rnns:
+                        for self.vocab_size in vocab_sizes:
+
+                            # Update params
+                            p = _update_params()
+
+                            batch = [
+                                torch.tensor(
+                                    [
+                                        np.random.randint(1, 20)
+                                        for _ in range(
+                                            np.random.
+                                            randint(3, self.gen_lens[1])
+                                        )
+                                    ]
+                                ).long() for _ in range(self.bs)
+                            ]
+                            batch = sorted(
+                                batch, key=lambda x: len(x), reverse=True
+                            )
+
+                            (enc_in, dec_seq,
+                             target_seq) = get_data_preparation(
+                                 p['batch_mode']
+                             )(
+                                 batch,
+                                 input_keep=0.8,
+                                 start_index=2,
+                                 end_index=3,
+                                 device=torch.device('cpu')
+                             )
+
+                            lat = torch.rand(self.bs, p['latent_dim'])
+                            prime = torch.Tensor([2])
+
+                            self.start = time.time()
+                            enc = StackGRUEncoder(p)
+                            dec = StackGRUDecoder(p)
+                            vae = TeacherVAE(enc, dec)
+                            self.setup = time.time()
+
+                            enc_out = enc.encoder_train_step(enc_in)
+                            self.enc_t = time.time()
+
+                            latent_z = vae.reparameterize(*enc_out
+                                                          ).unsqueeze(0)
+                            self.reparam_t = time.time()
+
+                            dec_out = vae.decode(latent_z, dec_seq, target_seq)
+                            self.dec_t = time.time()
+                            print(p['batch_mode'])
+                            _log()
