@@ -6,6 +6,8 @@ import torch.nn as nn
 
 from .stack_rnn import StackGRU
 from ..utils.search import BeamSearch, SamplingSearch
+from ..utils.hyperparams import OPTIMIZER_FACTORY
+from paccmann_omics.generators.vae import VAE
 
 
 class StackGRUEncoder(StackGRU):
@@ -77,8 +79,8 @@ class StackGRUEncoder(StackGRU):
         """
 
         # Forward pass
-        hidden = self.init_hidden()
-        stack = self.init_stack()
+        hidden = self.init_hidden
+        stack = self.init_stack
         for input_entry in input_seq:
             output, hidden, stack = self(input_entry, hidden, stack)
 
@@ -109,13 +111,11 @@ class StackGRUEncoder(StackGRU):
         return mu, logvar
 
     def _post_gru_reshape(self, hidden: torch.Tensor) -> torch.Tensor:
-        expected_shape = torch.tensor(
-            [self.n_layers, self.batch_size, self.rnn_cell_size]
-        )
-        if not torch.equal(torch.tensor(hidden.shape), expected_shape):
+
+        if not torch.equal(torch.tensor(hidden.shape), self.expected_shape):
             raise ValueError(
                 f'GRU hidden layer has incorrect shape: {hidden.shape}. '
-                f'Expected shape: {expected_shape}'
+                f'Expected shape: {self.expected_shape}'
             )
 
         # Layers x Batch x Cell_size ->  B x C
@@ -158,6 +158,11 @@ class StackGRUDecoder(StackGRU):
         self.latent_to_hidden = nn.Linear(
             in_features=self.latent_dim, out_features=self.rnn_cell_size
         )
+
+        self.criterion = nn.CrossEntropyLoss()
+        self.optimizer = OPTIMIZER_FACTORY[
+            params.get('optimizer', 'adadelta')
+        ](self.parameters(), lr=params.get('lr', 0.01))  # yapf: disable
 
     def decoder_train_step(self, latent_z, input_seq, target_seq):
         """
@@ -287,7 +292,7 @@ class StackGRUDecoder(StackGRU):
         return generated_seq
 
 
-class TeacherVAE(nn.Module):
+class TeacherVAE(VAE):
 
     def __init__(self, encoder, decoder):
         """
