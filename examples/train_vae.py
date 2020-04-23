@@ -206,7 +206,8 @@ def main(parser_namespace):
                 save_interval=params['save_interval'],
                 eval_interval=params['eval_interval'],
                 loss_tracker=loss_tracker,
-                logger=logger
+                logger=logger,
+                batch_mode=params.get('batch_mode')
             )
             logger.info(f'Epoch {epoch}, took {time() - t:.1f}.')
 

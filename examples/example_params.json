@@ -23,5 +23,6 @@
     "save_interval": 1000,
     "eval_interval": 200,
     "num_workers": 0,
-    "pin_memory": false
+    "pin_memory": false,
+    "batch_mode": "packed"
 }
