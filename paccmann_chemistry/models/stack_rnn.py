@@ -93,6 +93,8 @@ class StackGRU(nn.Module):
         # TODO: Move this out to stack GRU decoder
         self.output_layer = nn.Linear(self.rnn_cell_size, self.vocab_size)
 
+        self.set_batch_mode(params.get('batch_mode'))
+
         self._check_params()
 
     def _update_batch_size(self, batch_size: int) -> None:
@@ -144,6 +146,36 @@ class StackGRU(nn.Module):
         output, hidden = self.gru(gru_input, hidden)
         output = self.output_layer(output).squeeze()
         return output, hidden, stack
+
+    def _forward_fn(self, input_seq, hidden, stack):
+        raise NotImplementedError
+
+    def _forward_pass_padded(self, *args):
+        raise NotImplementedError
+
+    def _forward_pass_packed(self, *args):
+        raise NotImplementedError
+
+    def set_batch_mode(self, mode: str) -> None:
+        """Select forward function mode
+
+        Args:
+            mode (str): Mode to use. Available modes:
+                `padded`, `packed`
+
+        """
+        if not isinstance(mode, str):
+            raise TypeError('Argument `mode` should be a string.')
+        mode = mode.capitalize()
+        MODES = {
+            'Padded': self._forward_pass_padded,
+            'Packed': self._forward_pass_packed
+        }
+        if mode not in MODES:
+            raise NotImplementedError(
+                f'Unknown mode: {mode}. Available modes: {MODES.keys()}'
+            )
+        self._forward_fn = MODES[mode]
 
     def _stack_update(self, embedded_input, hidden, stack):
         """Pre-gru stack update operations"""
