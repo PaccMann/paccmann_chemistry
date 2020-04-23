@@ -146,18 +146,18 @@ class testTeacherVAE(unittest.TestCase):
     """Testing the TeacherVAE"""
 
     params = {
-        'latent_dim': 128,
-        'embedding_size': 80,
-        'stack_width': 50,
-        'stack_depth': 50,
+        'latent_dim': 24,
+        'embedding_size': 30,
+        'stack_width': 5,
+        'stack_depth': 5,
         'dropout': .7
     }
     use_stacks = [True, False]
     gen_lens = [50, 200]
     bidirectionals = ['True', 'False']
-    n_layerss = [2, 6]
-    batch_sizes = [8, 256]
-    rnns = [8, 512]
+    n_layerss = [2, 4]
+    batch_sizes = [8, 128]
+    rnns = [8, 128]
     vocab_sizes = [100, 500]
     beam_sizes = [2, 8]
     top_tokenss = [5, 30]
@@ -203,33 +203,33 @@ class testTeacherVAE(unittest.TestCase):
             )
 
         # # Run
-        for self.batch_mode in self.batch_modes:
-            for self.use_stack in self.use_stacks:
-                for self.bidirectional in self.bidirectionals:
-                    for self.n_layers in self.n_layerss:
-                        for self.bs in self.batch_sizes:
-                            for self.rnn in self.rnns:
-                                for self.vocab_size in self.vocab_sizes:
+        self.batch_mode = 'Padded'
+        for self.use_stack in self.use_stacks:
+            for self.bidirectional in self.bidirectionals:
+                for self.n_layers in self.n_layerss:
+                    for self.bs in self.batch_sizes:
+                        for self.rnn in self.rnns:
+                            for self.vocab_size in self.vocab_sizes:
 
-                                    # Update params
-                                    p = _update_params()
-                                    enc_in = torch.rand(
-                                        self.gen_lens[1], self.bs
-                                    ).long()
-                                    lat = torch.rand(self.bs, p['latent_dim'])
-                                    prime = torch.Tensor([2])
+                                # Update params
+                                p = _update_params()
+                                enc_in = torch.rand(
+                                    self.gen_lens[1], self.bs
+                                ).long()
+                                lat = torch.rand(self.bs, p['latent_dim'])
+                                prime = torch.Tensor([2])
 
-                                    self.start = time.time()
-                                    enc = StackGRUEncoder(p)
-                                    dec = StackGRUDecoder(p)
-                                    vae = TeacherVAE(enc, dec)
-                                    self.setup = time.time()
+                                self.start = time.time()
+                                enc = StackGRUEncoder(p)
+                                dec = StackGRUDecoder(p)
+                                vae = TeacherVAE(enc, dec)
+                                self.setup = time.time()
 
-                                    enc_out = enc.encoder_train_step(enc_in)
-                                    self.enc_t = time.time()
-                                    dec_out = vae.decode(lat, enc_in, enc_in)
-                                    self.dec_t = time.time()
-                                    _log()
+                                enc_out = enc.encoder_train_step(enc_in)
+                                self.enc_t = time.time()
+                                dec_out = vae.decode(lat, enc_in, enc_in)
+                                self.dec_t = time.time()
+                                _log()
 
         logger.info(f'***Decoder search tests***')
 
@@ -278,14 +278,13 @@ class testTeacherVAE(unittest.TestCase):
                             _call_fn(beam=False)
         self.assertTrue(True)
 
-
     def test_speed_pack_vs_pad(self):
         logger.info('\nTesting Pack vs Pad')
 
-        n_layerss = [2]
+        n_layerss = [2, 4]
         batch_sizes = [8, 128]
-        rnns = [8, 256]
-        vocab_sizes = [100]
+        rnns = [8, 128]
+        vocab_sizes = [20, 100]
         batch_modes = ['Padded', 'Packed']
 
         def _update_params():
@@ -311,7 +310,7 @@ class testTeacherVAE(unittest.TestCase):
                 f' {self.bs}, RNN: {self.rnn}, Vocab: {self.vocab_size}\n'
                 f'Setup: {self.setup-self.start:.3f}, '
                 f'Encoder: {self.enc_t-self.setup:.3f}, '
-                f'Reparam: {self.reparam_t - self.enc_t} '
+                f'Reparam: {self.reparam_t - self.enc_t:.3f} '
                 f'Decoder: {self.dec_t-self.reparam_t:.3f}\n'
             )
 
@@ -319,8 +318,6 @@ class testTeacherVAE(unittest.TestCase):
         self.use_stack = True
         self.bidirectional = True
         for self.batch_mode in batch_modes:
-            # for self.use_stack in self.use_stacks:
-            # for self.bidirectional in self.bidirectionals:
             for self.n_layers in n_layerss:
                 for self.bs in batch_sizes:
                     for self.rnn in rnns:
@@ -373,6 +370,5 @@ class testTeacherVAE(unittest.TestCase):
 
                             dec_out = vae.decode(latent_z, dec_seq, target_seq)
                             self.dec_t = time.time()
-                            print(p['batch_mode'])
                             _log()
         self.assertTrue(True)
