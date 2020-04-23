@@ -44,7 +44,7 @@ class StackGRU(nn.Module):
         """
 
         super(StackGRU, self).__init__()
-
+        self.device = get_device()
         self.embedding_size = params['embedding_size']
         self.rnn_cell_size = params['rnn_cell_size']
         self.vocab_size = params['vocab_size']
@@ -52,8 +52,6 @@ class StackGRU(nn.Module):
         self.stack_depth = params['stack_depth']
         self.n_layers = params['n_layers']
         self._update_batch_size(params['batch_size'])
-
-        self.device = get_device()
 
         self.gru_input = self.embedding_size
         self.use_stack = params.get('use_stack', True)
@@ -88,11 +86,7 @@ class StackGRU(nn.Module):
             dropout=params['dropout']
         )
 
-        # TODO: IN constructor only use .data_field
-
         # TODO: Move this out to stack GRU decoder
-        self.output_layer = nn.Linear(self.rnn_cell_size, self.vocab_size)
-
         self.set_batch_mode(params.get('batch_mode'))
 
         self._check_params()
@@ -123,8 +117,7 @@ class StackGRU(nn.Module):
 
         Args:
             input_token (torch.Tensor): LongTensor containing
-                indices of the input token of size `batch_size` or
-                `[1, batch_size]`.
+                indices of the input token of or `[1, batch_size]`.
             hidden (torch.Tensor): Hidden state of size
                 `[n_layers, batch_size, rnn_cell_size]`.
             stack (torch.Tensor): Previous step's stack of size
@@ -137,14 +130,12 @@ class StackGRU(nn.Module):
             Hidden state of size `[1, batch_size, rnn_cell_size]`.
             Stack of size `[batch_size, stack_depth, stack_width]`.
         """
-
         embedded_input = self.embedding(input_token)
 
         # NOTE: Only if use_stack is True, this actually updates the stack.
         gru_input, stack = self.update(embedded_input, hidden, stack)
 
         output, hidden = self.gru(gru_input, hidden)
-        output = self.output_layer(output).squeeze()
         return output, hidden, stack
 
     def _forward_fn(self, input_seq, hidden, stack):
