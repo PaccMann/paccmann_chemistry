@@ -25,8 +25,8 @@ class TestStackGRUEncoder(unittest.TestCase):
 
     default_params = {
         'latent_dim': 128,
-        'rnn_cell_size': 30,
-        'embedding_size': 80,
+        'rnn_cell_size': 32,
+        'embedding_size': 30,
         'vocab_size': 100,
         'stack_width': 50,
         'stack_depth': 51,
@@ -147,7 +147,7 @@ class testTeacherVAE(unittest.TestCase):
 
     params = {
         'latent_dim': 24,
-        'embedding_size': 30,
+        'embedding_size': 16,
         'stack_width': 5,
         'stack_depth': 5,
         'dropout': .7
@@ -157,7 +157,7 @@ class testTeacherVAE(unittest.TestCase):
     bidirectionals = ['True', 'False']
     n_layerss = [2, 4]
     batch_sizes = [8, 128]
-    rnns = [8, 128]
+    rnns = [20, 128]
     vocab_sizes = [100, 500]
     beam_sizes = [2, 8]
     top_tokenss = [5, 30]
@@ -213,9 +213,8 @@ class testTeacherVAE(unittest.TestCase):
 
                                 # Update params
                                 p = _update_params()
-                                enc_in = torch.rand(
-                                    self.gen_lens[1], self.bs
-                                ).long()
+                                enc_in = torch.rand(self.gen_lens[1],
+                                                    self.bs).long()
                                 lat = torch.rand(self.bs, p['latent_dim'])
                                 prime = torch.Tensor([2])
 
@@ -283,7 +282,7 @@ class testTeacherVAE(unittest.TestCase):
 
         n_layerss = [2, 4]
         batch_sizes = [8, 128]
-        rnns = [8, 128]
+        rnns = [32, 128]
         vocab_sizes = [20, 100]
         batch_modes = ['Padded', 'Packed']
 
@@ -360,7 +359,6 @@ class testTeacherVAE(unittest.TestCase):
                             dec = StackGRUDecoder(p)
                             vae = TeacherVAE(enc, dec)
                             self.setup = time.time()
-
                             enc_out = enc.encoder_train_step(enc_in)
                             self.enc_t = time.time()
 
