@@ -12,8 +12,24 @@ import pytoda
 logger = logging.getLogger(__name__)
 
 
+def get_device():
+    return torch.device('cuda' if cuda() else 'cpu')
+
+
+def cuda():
+    return torch.cuda.is_available()
+
+
+DEVICE = get_device()
+
+
 def sequential_data_preparation(
-    input_batch, input_keep=1, start_index=2, end_index=3, dropout_index=1
+    input_batch,
+    input_keep=1,
+    start_index=2,
+    end_index=3,
+    dropout_index=1,
+    device=get_device()
 ):
     """
     Sequential Training Data Builder.
@@ -28,6 +44,7 @@ def sequential_data_preparation(
         start_index (int): The index of the sequence start token.
         end_index (int): The index of the sequence end token.
         dropout_index (int): The index of the dropout token. Defaults to 1.
+        device (torch.device): Device to be used.
     Returns:
     (torch.Tensor, torch.Tensor, torch.Tensor): encoder_seq, decoder_seq,
         target_seq
@@ -39,7 +56,7 @@ def sequential_data_preparation(
             in the end_index, of size `[sequence length +1, batch_size, 1]`.
     """
     batch_size = input_batch.shape[1]
-    input_batch = torch.LongTensor(input_batch.cpu().numpy())
+    input_batch = input_batch.long().to(device)
     decoder_batch = input_batch.clone()
     # apply token dropout if keep != 1
     if input_keep != 1:
@@ -54,18 +71,11 @@ def sequential_data_preparation(
 
         decoder_batch[dropout_loc] = dropout_indices
 
-    start_indices = torch.LongTensor(
-        start_index * torch.ones(1, batch_size).numpy()
-    )
-    input_seq = torch.cat((start_indices, input_batch), dim=0)
-    decoder_seq = torch.cat((start_indices, decoder_batch), dim=0)
-
     end_padding = torch.LongTensor(torch.zeros(1, batch_size).numpy())
     target_seq = torch.cat((input_batch, end_padding), dim=0)
-    target_seq = copy.deepcopy(target_seq).transpose(1, 0)
-    target_seq = target_seq.transpose(1, 0)
-    device = get_device()
-    return input_seq.to(device), decoder_seq.to(device), target_seq.to(device)
+    target_seq = copy.deepcopy(target_seq).to(device)
+
+    return input_batch, decoder_batch, target_seq
 
 
 def packed_sequential_data_preparation(
@@ -74,6 +84,7 @@ def packed_sequential_data_preparation(
     start_index=2,
     end_index=3,
     dropout_index=1,
+    device=get_device()
 ):
     """
     Sequential Training Data Builder.
@@ -104,7 +115,7 @@ def packed_sequential_data_preparation(
     def _process_sample(sample):
         if len(sample.shape) != 1:
             raise ValueError
-        input = torch.LongTensor(sample.cpu().numpy())
+        input = sample.long().to(device)
         decoder = input.clone()
 
         # apply token dropout if keep != 1
@@ -115,13 +126,8 @@ def packed_sequential_data_preparation(
             dropout_loc = np.where(mask == 0)[0]
             decoder[dropout_loc] = dropout_index
 
-        # TODO: Don't we have the start index at the begining already?
-        # input_seq = torch.cat((torch.tensor([start_index]), input))
-        # decoder_seq = torch.cat((torch.tensor([start_index]), decoder))
-
         target = input.detach().clone()  # just .clone() propagates to graph
-        device = get_device()
-        return input.to(device), decoder.to(device), target.to(device)
+        return input, decoder, target.to(device)
 
     batch = [_process_sample(sample) for sample in input_batch]
 
@@ -214,14 +220,6 @@ def kl_weight(step, growth_rate=0.004):
     """
     weight = 1 / (1 + math.exp((15 - growth_rate * step)))
     return weight
-
-
-def get_device():
-    return torch.device('cuda' if cuda() else 'cpu')
-
-
-def cuda():
-    return torch.cuda.is_available()
 
 
 def to_np(x):
