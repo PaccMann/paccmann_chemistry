@@ -2,9 +2,12 @@
 import copy
 import logging
 import math
+
 import numpy as np
 import torch
 from torch.distributions.bernoulli import Bernoulli
+
+import pytoda
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +184,7 @@ def manage_step_packed_vars(final_var, var, batch_size, prev_batch, batch_dim):
         if batch_dim == 0:
             if final_var is not None:
                 final_var[finished_slice, :, :] = var[finished_slice, :, :]
-            var = var[:break_index, :, :]    
+            var = var[:break_index, :, :]
         elif batch_dim == 1:
             if final_var is not None:
                 final_var[:, finished_slice, :] = var[:, finished_slice, :]
@@ -223,3 +226,19 @@ def cuda():
 
 def to_np(x):
     return x.data.cpu().numpy()
+
+
+def print_example_reconstruction(reconstruction, inp, language):
+
+    sample = np.random.randint(len(reconstruction))
+    prediction = torch.argmax(reconstruction, dim=1).tolist()
+    if isinstance(language, pytoda.smiles.SMILESLanguage):
+        _fn = language.token_indexes_to_smiles
+    elif isinstance(language, pytoda.proteins.ProteinLanguage):
+        _fn = language.token_indexes_to_sequence
+    else:
+        raise TypeError(f'Unknown language class: {type(language)}')
+
+    pred = _fn(prediction)
+    target = _fn(inp[sample].tolist())
+    return f'Sample input:\n\t {target}, model reconstructed:\n\t {pred}'
