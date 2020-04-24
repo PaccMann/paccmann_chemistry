@@ -1,5 +1,5 @@
 """Stack Augmented GRU Implementation."""
-import warnings
+import logging
 
 import torch
 import torch.nn as nn
@@ -7,8 +7,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from ..utils import get_device
-from ..utils.hyperparams import OPTIMIZER_FACTORY
 
+logger = logging.getLogger('stack_gru')
 # pylint: disable=not-callable, no-member
 
 
@@ -44,23 +44,27 @@ class StackGRU(nn.Module):
         """
 
         super(StackGRU, self).__init__()
-
+        self.device = get_device()
         self.embedding_size = params['embedding_size']
         self.rnn_cell_size = params['rnn_cell_size']
         self.vocab_size = params['vocab_size']
         self.stack_width = params['stack_width']
         self.stack_depth = params['stack_depth']
-        self.batch_size = params['batch_size']
         self.n_layers = params['n_layers']
-
-        self.device = get_device()
+        self._update_batch_size(params['batch_size'])
 
         self.gru_input = self.embedding_size
         self.use_stack = params.get('use_stack', True)
+
+        # Create the update function conditioned on whether stack is used.
         if self.use_stack:
             self.gru_input += self.stack_width
+            self.update = lambda inp, hidden, stack: self._stack_update(
+                inp, hidden, stack
+            )
         else:
-            warnings.warn('Attention: No stack will be used')
+            self.update = lambda inp, hidden, stack: (inp, stack)
+            logger.warning('Attention: No stack will be used')
         # Network
         self.stack_controls_layer = nn.Linear(
             in_features=self.rnn_cell_size, out_features=3
@@ -81,13 +85,30 @@ class StackGRU(nn.Module):
             bidirectional=False,
             dropout=params['dropout']
         )
-        self.output_layer = nn.Linear(self.rnn_cell_size, self.vocab_size)
-        self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = OPTIMIZER_FACTORY[
-            params.get('optimizer', 'adadelta')
-        ](self.parameters(), lr=params.get('lr', 0.01))  # yapf: disable
+
+        self.set_batch_mode(params.get('batch_mode'))
 
         self._check_params()
+
+    def _update_batch_size(self, batch_size: int) -> None:
+        """Updates the batch_size
+
+        Arguments:
+            batch_size (int): New batch size
+        """
+        self.batch_size = batch_size
+        self.expected_shape = torch.tensor(
+            [self.n_layers, self.batch_size, self.rnn_cell_size]
+        )
+        # Variable to initialize hidden state and stack
+        self.init_hidden = Variable(
+            torch.zeros(self.n_layers, self.batch_size,
+                        self.rnn_cell_size).to(self.device)
+        )
+        self.init_stack = Variable(
+            torch.zeros(self.batch_size, self.stack_depth,
+                        self.stack_width).to(self.device)
+        )
 
     def forward(self, input_token, hidden, stack):
         """
@@ -95,8 +116,7 @@ class StackGRU(nn.Module):
 
         Args:
             input_token (torch.Tensor): LongTensor containing
-                indices of the input token of size `batch_size` or
-                `[1, batch_size]`.
+                indices of the input token of or `[1, batch_size]`.
             hidden (torch.Tensor): Hidden state of size
                 `[n_layers, batch_size, rnn_cell_size]`.
             stack (torch.Tensor): Previous step's stack of size
@@ -109,21 +129,43 @@ class StackGRU(nn.Module):
             Hidden state of size `[1, batch_size, rnn_cell_size]`.
             Stack of size `[batch_size, stack_depth, stack_width]`.
         """
-        if input_token.shape[0] != 1 or len(input_token.shape) < 2:
-            # It may receive a single token as input so the first element is 1
-            # but actually corresponding to batch size. In that case we also
-            # resize.
-            input_token = input_token.view(1, -1)
         embedded_input = self.embedding(input_token)
 
-        if self.use_stack:
-            inp, stack = self._stack_update(embedded_input, hidden, stack)
-        else:
-            inp = embedded_input
+        # NOTE: Only if use_stack is True, this actually updates the stack.
+        gru_input, stack = self.update(embedded_input, hidden, stack)
 
-        output, hidden = self.gru(inp, hidden)
-        output = self.output_layer(output).squeeze()
+        output, hidden = self.gru(gru_input, hidden)
         return output, hidden, stack
+
+    def _forward_fn(self, input_seq, hidden, stack):
+        raise NotImplementedError
+
+    def _forward_pass_padded(self, *args):
+        raise NotImplementedError
+
+    def _forward_pass_packed(self, *args):
+        raise NotImplementedError
+
+    def set_batch_mode(self, mode: str) -> None:
+        """Select forward function mode
+
+        Args:
+            mode (str): Mode to use. Available modes:
+                `padded`, `packed`
+
+        """
+        if not isinstance(mode, str):
+            raise TypeError('Argument `mode` should be a string.')
+        mode = mode.capitalize()
+        MODES = {
+            'Padded': self._forward_pass_padded,
+            'Packed': self._forward_pass_packed
+        }
+        if mode not in MODES:
+            raise NotImplementedError(
+                f'Unknown mode: {mode}. Available modes: {MODES.keys()}'
+            )
+        self._forward_fn = MODES[mode]
 
     def _stack_update(self, embedded_input, hidden, stack):
         """Pre-gru stack update operations"""
@@ -171,54 +213,6 @@ class StackGRU(nn.Module):
         new_stack = new_stack + a_pop * stack_down
         return new_stack
 
-    def init_hidden(self, batch_size=None):
-        """Initializes hidden state."""
-        if batch_size is None:
-            batch_size = self.batch_size
-
-        result = torch.zeros(self.n_layers, batch_size, self.rnn_cell_size)
-        return Variable(result.to(self.device))
-
-    def init_stack(self, batch_size=None):
-        """Initializes Stack."""
-        if batch_size is None:
-            batch_size = self.batch_size
-        result = torch.zeros(batch_size, self.stack_depth, self.stack_width)
-        return Variable(result.to(self.device))
-
-    def train_step(self, input_seq, target_seq):
-        """
-        The train step method.
-
-        Args:
-            input_seq (torch.Tensor): Padded tensor of indices for a batch of
-                input sequences. Must be of shape
-                `[max batch sequence length +1, batch_size]`.
-            target_seq (torch.Tensor): Padded tensor of indices for a batch of
-                target sequences. Must be of shape
-                `[max batch sequence length +1, batch_size]`.
-
-        Note: Input and target sequences are outputs of
-            sequential_data_preparation(batch) with batches returned by a
-            DataLoader object.
-
-        Returns:
-            float: Average loss for all sequence steps.
-        """
-        hidden = self.init_hidden()
-        stack = self.init_stack()
-        self.zero_grad()
-        loss = 0
-        for input_entry, target_entry in zip(input_seq, target_seq):
-            output, hidden, stack = self(input_entry, hidden, stack)
-            loss += self.criterion(
-                output, torch.LongTensor(target_entry.squeeze().numpy())
-            )
-        loss.backward()
-        self.optimizer.step()
-
-        return loss.item() / len(input_seq)
-
     def _check_params(self):
         """
         Runs size checks on input parameter
@@ -226,4 +220,4 @@ class StackGRU(nn.Module):
         """
 
         if self.rnn_cell_size < self.embedding_size:
-            warnings.warn('Refrain from squashing embeddings in RNN cells')
+            logger.warning('Refrain from squashing embeddings in RNN cells')

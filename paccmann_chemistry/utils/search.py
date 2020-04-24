@@ -96,7 +96,7 @@ class SamplingSearch(Search):
 
         Args:
             temperature (float, optional): temperature parameter. Defaults to
-                1.0, a.k.a., no temperature. Temperature < 1 results in a more 
+                1.0, a.k.a., no temperature. Temperature < 1 results in a more
                 descriminative softmax, > 1 in a flatter distribution.
         """
         super().__init__(*args, **kwargs)

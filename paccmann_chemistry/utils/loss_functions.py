@@ -42,5 +42,5 @@ def vae_loss_function(
         kl_w = 1.
     else:
         kl_w = kl_weight(step, growth_rate=kl_growth)
-
+    print(f'Global step {step}, KL growth, {kl_growth}, weight: {kl_w}')
     return kl_w * kl_div + decoder_loss, kl_div

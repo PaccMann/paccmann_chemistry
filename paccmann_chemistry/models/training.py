@@ -7,10 +7,13 @@ import torch
 from ..utils.search import SamplingSearch
 from ..utils.hyperparams import OPTIMIZER_FACTORY
 from ..utils.loss_functions import vae_loss_function
-from ..utils import get_device, sequential_data_preparation
+from ..utils import (
+    get_device, sequential_data_preparation,
+    packed_sequential_data_preparation, print_example_reconstruction
+)
 
 
-def test_vae(model, dataloader, logger, input_keep):
+def test_vae(model, dataloader, logger, input_keep, batch_mode):
     """
     VAE test function.
 
@@ -25,6 +28,7 @@ def test_vae(model, dataloader, logger, input_keep):
         float: average test loss over the entire test data.
     """
     device = get_device()
+    data_preparation = get_data_preparation(batch_mode)
     vae_model = model.to(device)
     vae_model.eval()
     test_loss, test_rec, test_kl_div = 0, 0, 0
@@ -34,14 +38,13 @@ def test_vae(model, dataloader, logger, input_keep):
                 logger.info(
                     f'**TESTING**\t Processing batch {_iter}/{len(dataloader)}'
                 )
-            padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
-            padded_batch = padded_batch.to(device)
-            encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
-                padded_batch,
+
+            (encoder_seq, decoder_seq, target_seq) = data_preparation(
+                batch,
                 input_keep=input_keep,
-                start_index=dataloader.dataset.smiles_language.start_index,
-                end_index=dataloader.dataset.smiles_language.stop_index,
-                dropout_index=dataloader.dataset.smiles_language.unknown_index
+                start_index=2,
+                end_index=3,
+                device=device
             )
 
             decoder_loss, mu, logvar = vae_model(
@@ -63,9 +66,9 @@ def test_vae(model, dataloader, logger, input_keep):
 def train_vae(
     epoch, model, train_dataloader, val_dataloader, smiles_language,
     model_dir, search=SamplingSearch(), optimizer='adam', lr=1e-3,
-    kl_growth=0.0015, input_keep=1., test_input_keep=0., generate_len=100,
-    log_interval=100, eval_interval=200, save_interval=200, loss_tracker=None,
-    logger=None
+    kl_growth=0.0015, input_keep=1., test_input_keep=0., start_index=2,
+    end_index=3, generate_len=100, log_interval=100, eval_interval=200,
+    save_interval=200, loss_tracker=None, logger=None, batch_mode='padded'
 ):  # yapf: disable
     """
     VAE train function.
@@ -100,6 +103,7 @@ def train_vae(
         loss_tracker (dict): At each log_interval, update improved test
             losses and respective epoch.
         logger (logging.Logger): To display information on the fly.
+        batch_mode (str): Batch mode to use.
 
     Returns:
          dict: updated loss_tracker.
@@ -115,24 +119,24 @@ def train_vae(
         }
 
     device = get_device()
+    data_preparation = get_data_preparation(batch_mode)
     vae_model = model.to(device)
     vae_model.train()
     train_loss = 0
     optimizer = OPTIMIZER_FACTORY[optimizer](vae_model.parameters(), lr=lr)
     t = time()
     for _iter, batch in enumerate(train_dataloader):
-        global_step = (epoch - 1) * len(train_dataloader) + _iter
-        padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
-        padded_batch = padded_batch.to(device)
-        encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
-            padded_batch,
+
+        global_step = epoch * len(train_dataloader) + _iter
+
+        (encoder_seq, decoder_seq, target_seq) = data_preparation(
+            batch,
             input_keep=input_keep,
-            start_index=train_dataloader.dataset.smiles_language.start_index,
-            end_index=train_dataloader.dataset.smiles_language.stop_index,
-            dropout_index=(
-                train_dataloader.dataset.smiles_language.unknown_index
-            )
+            start_index=start_index,
+            end_index=end_index,
+            device=device
         )
+
         optimizer.zero_grad()
         decoder_loss, mu, logvar = vae_model(
             encoder_seq, decoder_seq, target_seq
@@ -142,6 +146,7 @@ def train_vae(
         )
         loss.backward()
         train_loss += loss.detach().item()
+
         optimizer.step()
         torch.cuda.empty_cache()
         if _iter and _iter % log_interval == 0:
@@ -179,9 +184,15 @@ def train_vae(
                 if train_dataloader.dataset._dataset.selfies else mol
             )
             logger.info(f'\nSample Generated Molecule:\n{mol}')
+            if batch_mode == 'padded':
+                logger.info(
+                    print_example_reconstruction(
+                        vae_model.decoder.outputs, target_seq, smiles_language
+                    )
+                )
 
             test_loss, test_rec, test_kld = test_vae(
-                vae_model, val_dataloader, logger, test_input_keep
+                vae_model, val_dataloader, logger, test_input_keep, batch_mode
             )
             logger.info(
                 f'***TESTING*** \t Epoch {epoch}, test loss = '
@@ -229,3 +240,41 @@ def train_vae(
     )
 
     return loss_tracker
+
+
+def _prepare_packed(batch, input_keep, start_index, end_index, device=None):
+    encoder_seq, decoder_seq, target_seq = packed_sequential_data_preparation(
+        batch,
+        input_keep=input_keep,
+        start_index=start_index,
+        end_index=end_index
+    )
+    return encoder_seq, decoder_seq, target_seq
+
+
+def _prepare_padded(batch, input_keep, start_index, end_index, device):
+    padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
+    padded_batch = padded_batch.to(device)
+    encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
+        padded_batch, input_keep=input_keep, start_index=2, end_index=3
+    )
+    return encoder_seq, decoder_seq, target_seq
+
+
+def get_data_preparation(mode):
+    """Select data preparation function mode
+
+    Args:
+        mode (str): Mode to use. Available modes:
+            `Padded`, `Packed`
+
+    """
+    if not isinstance(mode, str):
+        raise TypeError('Argument `mode` should be a string.')
+    mode = mode.capitalize()
+    MODES = {'Padded': _prepare_padded, 'Packed': _prepare_packed}
+    if mode not in MODES:
+        raise NotImplementedError(
+            f'Unknown mode: {mode}. Available modes: {MODES.keys()}'
+        )
+    return MODES[mode]
