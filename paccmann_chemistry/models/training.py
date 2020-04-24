@@ -7,8 +7,10 @@ import torch
 from ..utils.search import SamplingSearch
 from ..utils.hyperparams import OPTIMIZER_FACTORY
 from ..utils.loss_functions import vae_loss_function
-from ..utils import get_device, sequential_data_preparation, \
-                    packed_sequential_data_preparation
+from ..utils import (
+    get_device, sequential_data_preparation,
+    packed_sequential_data_preparation, print_example_reconstruction
+)
 
 
 def test_vae(model, dataloader, logger, input_keep, batch_mode):
@@ -125,7 +127,7 @@ def train_vae(
     t = time()
     for _iter, batch in enumerate(train_dataloader):
 
-        global_step = (epoch - 1) * len(train_dataloader) + _iter
+        global_step = epoch * len(train_dataloader) + _iter
 
         (encoder_seq, decoder_seq, target_seq) = data_preparation(
             batch,
@@ -186,6 +188,11 @@ def train_vae(
                 if train_dataloader.dataset._dataset.selfies else mol
             )
             logger.info(f'\nSample Generated Molecule:\n{mol}')
+            logger.info(
+                print_example_reconstruction(
+                    vae_model.decoder.outputs, target_seq, smiles_language
+                )
+            )
 
             test_loss, test_rec, test_kld = test_vae(
                 vae_model, val_dataloader, logger, test_input_keep, batch_mode

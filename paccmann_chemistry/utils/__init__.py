@@ -9,5 +9,6 @@ from .utils import (  # noqa
     kl_weight,
     get_device,
     cuda,
-    to_np
+    to_np,
+    print_example_reconstruction
 )
