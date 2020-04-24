@@ -86,7 +86,6 @@ class StackGRU(nn.Module):
             dropout=params['dropout']
         )
 
-        # TODO: Move this out to stack GRU decoder
         self.set_batch_mode(params.get('batch_mode'))
 
         self._check_params()

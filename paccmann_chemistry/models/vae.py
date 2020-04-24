@@ -364,7 +364,6 @@ class StackGRUDecoder(StackGRU):
         input_seq_packed, _ = utils.perpare_packed_input(target_seq)
         prev_batch = batch_sizes[0]
 
-        outputs = []
         for input_entry, target_entry, batch_size in zip(
             input_seq_packed, input_seq_packed, batch_sizes
         ):
@@ -379,15 +378,9 @@ class StackGRUDecoder(StackGRU):
                 input_entry.unsqueeze(0), hidden, stack
             )
             output = self.output_layer(output).squeeze()
-            # TODO Check that the shapes are all correct
             if len(output.shape) < 2:
                 output = output.unsqueeze(0)
             loss += self.criterion(output, target_entry)
-            outputs.append(output)
-
-        # For monitoring purposes
-        # self.outputs = torch.argmax(torch.stack(outputs, -1), 1)
-
         return loss
 
     def generate_from_latent(

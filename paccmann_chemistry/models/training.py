@@ -146,10 +146,6 @@ def train_vae(
         )
         loss.backward()
         train_loss += loss.detach().item()
-        # for name, param in vae_model.named_parameters():
-        #     if param.grad is None:
-        #         print(name)
-        #         print(param.grad)
 
         optimizer.step()
         torch.cuda.empty_cache()
@@ -188,11 +184,12 @@ def train_vae(
                 if train_dataloader.dataset._dataset.selfies else mol
             )
             logger.info(f'\nSample Generated Molecule:\n{mol}')
-            logger.info(
-                print_example_reconstruction(
-                    vae_model.decoder.outputs, target_seq, smiles_language
+            if batch_mode == 'padded':
+                logger.info(
+                    print_example_reconstruction(
+                        vae_model.decoder.outputs, target_seq, smiles_language
+                    )
                 )
-            )
 
             test_loss, test_rec, test_kld = test_vae(
                 vae_model, val_dataloader, logger, test_input_keep, batch_mode
