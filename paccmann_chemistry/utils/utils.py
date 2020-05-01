@@ -312,9 +312,9 @@ def print_example_reconstruction(reconstruction, inp, language, selfies=False):
     # In padding mode input is tensor
     if isinstance(inp, torch.Tensor):
         inp = inp.permute(1, 0)
-        sample = inp[sample_idx].tolist()
-    elif isinstance(inp, list):
-        sample = inp[sample_idx]
+    elif not isinstance(inp, list):
+        raise TypeError(f'Unknown input type {type(inp)}')
+    sample = inp[sample_idx].tolist()
 
     pred = _fn(reconstructed)
     target = _fn(sample)

@@ -4,13 +4,14 @@ import os
 from time import time
 
 import torch
-from ..utils.search import SamplingSearch
+
+from ..utils import (
+    crop_start_stop, get_device, packed_sequential_data_preparation,
+    print_example_reconstruction, sequential_data_preparation, unpack_sequence
+)
 from ..utils.hyperparams import OPTIMIZER_FACTORY
 from ..utils.loss_functions import vae_loss_function
-from ..utils import (
-    get_device, sequential_data_preparation,
-    packed_sequential_data_preparation, print_example_reconstruction
-)
+from ..utils.search import SamplingSearch
 
 
 def test_vae(model, dataloader, logger, input_keep, batch_mode):
@@ -119,6 +120,7 @@ def train_vae(
         }
 
     device = get_device()
+    selfies = train_dataloader.dataset._dataset.selfies
     data_preparation = get_data_preparation(batch_mode)
     vae_model = model.to(device)
     vae_model.train()
@@ -129,7 +131,7 @@ def train_vae(
 
         global_step = epoch * len(train_dataloader) + _iter
 
-        (encoder_seq, decoder_seq, target_seq) = data_preparation(
+        encoder_seq, decoder_seq, target_seq = data_preparation(
             batch,
             input_keep=input_keep,
             start_index=start_index,
@@ -157,6 +159,16 @@ def train_vae(
             )
             t = time()
             train_loss = 0
+
+            if batch_mode == 'packed':
+                target_seq = unpack_sequence(target_seq)
+            logger.info(
+                print_example_reconstruction(
+                    vae_model.decoder.outputs, target_seq, smiles_language,
+                    selfies
+                )
+            )
+
         if _iter and _iter % save_interval == 0:
             save_dir = os.path.join(
                 model_dir, f'weights/saved_model_epoch_{epoch}_iter_{_iter}.pt'
@@ -164,6 +176,7 @@ def train_vae(
             vae_model.save(save_dir)
             logger.info(f'***SAVING***\t Epoch {epoch}, saved model.')
         if _iter and _iter % eval_interval == 0:
+            vae_model.eval()
             latent_z = torch.randn(1, mu.shape[0], mu.shape[1]).to(device)
             molecule_iter = vae_model.generate(
                 latent_z,
@@ -176,20 +189,19 @@ def train_vae(
                 generate_len=generate_len,
                 search=search
             )
-            mol = next(molecule_iter).tolist()
-            mol = smiles_language.token_indexes_to_smiles(mol)
-            # SELFIES conversion if necessary
-            mol = (
-                smiles_language.selfies_to_smiles(mol)
-                if train_dataloader.dataset._dataset.selfies else mol
+            mol = next(molecule_iter)
+            mol = smiles_language.token_indexes_to_smiles(
+                crop_start_stop(mol, smiles_language)
             )
+            # SELFIES conversion if necessary
+            mol = smiles_language.selfies_to_smiles(mol) if selfies else mol
             logger.info(f'\nSample Generated Molecule:\n{mol}')
-            if batch_mode == 'padded':
-                logger.info(
-                    print_example_reconstruction(
-                        vae_model.decoder.outputs, target_seq, smiles_language
-                    )
+            logger.info(
+                print_example_reconstruction(
+                    vae_model.decoder.outputs, target_seq, smiles_language,
+                    selfies
                 )
+            )
 
             test_loss, test_rec, test_kld = test_vae(
                 vae_model, val_dataloader, logger, test_input_keep, batch_mode
@@ -199,6 +211,7 @@ def train_vae(
                 f'{test_loss:.4f}, reconstruction = {test_rec:.4f}, '
                 f'KL = {test_kld:.4f}.'
             )
+            vae_model.train()
 
             if test_loss < loss_tracker['test_loss_a']:
                 loss_tracker.update(
@@ -249,6 +262,7 @@ def _prepare_packed(batch, input_keep, start_index, end_index, device=None):
         start_index=start_index,
         end_index=end_index
     )
+
     return encoder_seq, decoder_seq, target_seq
 
 
@@ -256,7 +270,10 @@ def _prepare_padded(batch, input_keep, start_index, end_index, device):
     padded_batch = torch.nn.utils.rnn.pad_sequence(batch)
     padded_batch = padded_batch.to(device)
     encoder_seq, decoder_seq, target_seq = sequential_data_preparation(
-        padded_batch, input_keep=input_keep, start_index=2, end_index=3
+        padded_batch,
+        input_keep=input_keep,
+        start_index=start_index,
+        end_index=end_index
     )
     return encoder_seq, decoder_seq, target_seq
 
