@@ -162,6 +162,8 @@ class testTeacherVAE(unittest.TestCase):
     beam_sizes = [2, 8]
     top_tokenss = [5, 30]
     batch_modes = ['Padded', 'Packed']
+    start_index = 2
+    stop_index = 3
 
     def test_speed(self):
 
@@ -266,8 +268,8 @@ class testTeacherVAE(unittest.TestCase):
                         enc = StackGRUEncoder(p)
                         dec = StackGRUDecoder(p)
                         self.vae = TeacherVAE(enc, dec)
-                        self.lat = torch.randn(self.bs, p['latent_dim'])
-                        self.prime = torch.Tensor([2]).long()
+                        self.lat = torch.randn(1, self.bs, p['latent_dim'])
+                        self.prime = torch.Tensor([self.start_index]).long()
 
                         if self.search == BeamSearch:
                             for self.beam_size in self.beam_sizes:
@@ -327,13 +329,13 @@ class testTeacherVAE(unittest.TestCase):
 
                             batch = [
                                 torch.tensor(
-                                    [
-                                        np.random.randint(1, 20)
+                                    [self.start_index] + [
+                                        np.random.randint(4, 20)
                                         for _ in range(
                                             np.random.
                                             randint(3, self.gen_lens[1])
                                         )
-                                    ]
+                                    ] + [self.stop_index]
                                 ).long() for _ in range(self.bs)
                             ]
                             batch = sorted(

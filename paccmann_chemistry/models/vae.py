@@ -454,7 +454,6 @@ class StackGRUDecoder(StackGRU):
 
         for idx in range(generate_len):
             if not is_beam:
-
                 output, hidden, stack = self(input_token, hidden, stack)
 
                 logits = self.output_layer(output).squeeze()

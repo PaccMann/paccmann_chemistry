@@ -191,7 +191,6 @@ def packed_to_padded(seq, target_packed):
     for t in range(T):
         seq_lst = seq[t].tolist()
         tg_lst = target_packed[t - 1].tolist()
-
         # Insert Padding token where necessary
         [seq_lst.insert(idx, 0) for idx in sorted(stopped_idx, reverse=False)]
         padded[:, t] = torch.Tensor(seq_lst).long()
