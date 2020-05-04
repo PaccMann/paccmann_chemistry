@@ -52,7 +52,6 @@ class StackGRU(nn.Module):
         self.stack_depth = params['stack_depth']
         self.n_layers = params['n_layers']
         self._update_batch_size(params['batch_size'])
-
         self.gru_input = self.embedding_size
         self.use_stack = params.get('use_stack', True)
 
@@ -73,11 +72,30 @@ class StackGRU(nn.Module):
             in_features=self.rnn_cell_size, out_features=self.stack_width
         )
 
-        self.embedding = nn.Embedding(
-            self.vocab_size,
-            self.embedding_size,
-            padding_idx=params.get('pad_index', 0)
-        )
+        if params.get('embedding', 'learned') == 'learned':
+            self.embedding = nn.Embedding(
+                self.vocab_size,
+                self.embedding_size,
+                padding_idx=params.get('pad_index', 0)
+            )
+        elif params.get('embedding', 'learned') == 'one_hot':
+            self.embedding_size = self.vocab_size
+            self.embedding = nn.Embedding(
+                self.vocab_size,
+                self.embedding_size,
+                padding_idx=params.get('pad_index', 0)
+            )
+            # Plug in one hot-vectors and freeze weights
+            self.embedding.load_state_dict(
+                {
+                    'weight':
+                        torch.nn.functional.one_hot(
+                            torch.arange(self.vocab_size)
+                        )
+                }
+            )
+            self.embedding.weight.requires_grad = False
+
         self.gru = nn.GRU(
             self.gru_input,
             self.rnn_cell_size,

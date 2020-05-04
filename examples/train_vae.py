@@ -90,10 +90,6 @@ def main(parser_namespace):
         # Load SMILES language
         smiles_language = SMILESLanguage.load(smiles_language_filepath)
 
-        params.update({
-            'vocab_size': smiles_language.number_of_tokens,
-            'pad_index': smiles_language.padding_index
-        })  # yapf:disable
         # create SMILES eager dataset
         smiles_train_data = SMILESDataset(
             train_smiles_filepath,
@@ -128,9 +124,12 @@ def main(parser_namespace):
             device=device
         )
 
-        # Update the smiles_vocabulary size
-        if not params.get('embedding', 'learned') == 'pretrained':
-            params.update({'vocab_size': smiles_language.number_of_tokens})
+        params.update({
+            'vocab_size': smiles_language.number_of_tokens,
+            'pad_index': smiles_language.padding_index
+        })  # yapf:disable
+        if params.get('embedding', 'learned') == 'one_hot':
+            params.update({'embedding_size': params['vocab_size']})
 
         with open(os.path.join(model_dir, 'model_params.json'), 'w') as fp:
             json.dump(params, fp)

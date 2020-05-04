@@ -130,7 +130,7 @@ def packed_sequential_data_preparation(
         # just .clone() propagates to graph
         target = torch.cat(
             [input[1:].detach().clone(),
-             torch.Tensor([0]).long()]
+             torch.Tensor([0]).long().to(device)]
         )
         return input, decoder, target.to(device)
 
