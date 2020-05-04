@@ -170,7 +170,7 @@ class StackGRUEncoder(StackGRU):
             )
             prev_batch = batch_size
             output, hidden, stack = self(
-                input_entry.unsqueeze(0), hidden, stack
+                input_entry.unsqueeze(0), hidden.contiguous(), stack
             )
 
         left_dims = hidden.shape[1]
@@ -378,7 +378,7 @@ class StackGRUDecoder(StackGRU):
 
             prev_batch = batch_size
             output, hidden, stack = self(
-                input_entry.unsqueeze(0), hidden, stack
+                input_entry.unsqueeze(0), hidden.contiguous(), stack
             )
             output = self.output_layer(output).squeeze()
             if len(output.shape) < 2:
@@ -641,7 +641,7 @@ class TeacherVAE(nn.Module):
         )
 
         molecule_gen = (
-            takewhile(lambda x: x != end_token.cpu(), molecule[1:])
+            takewhile(lambda x: x != end_token.cpu(), molecule[1:].cpu())
             for molecule in generated_batch
         )   # yapf: disable
 
