@@ -282,7 +282,24 @@ def crop_start_stop(smiles, smiles_language):
         return smiles
 
 
-def print_example_reconstruction(reconstruction, inp, language, selfies=False):
+def crop_start(smiles, smiles_language):
+    """
+    Arguments:
+        smiles {torch.Tensor} -- Shape 1 x T
+    Returns:
+        smiles {torch.Tensor} -- Cropped away everything outside Start/Stop.
+    """
+    smiles = smiles.tolist()
+    try:
+        start_idx = smiles.index(smiles_language.start_index)
+        return smiles[start_idx + 1:]
+    except Exception:
+        return smiles
+
+
+def print_example_reconstruction(
+    reconstruction, inp, language, selfies=False, crop_stop=True
+):
     """[summary]
 
     Arguments:
@@ -306,7 +323,10 @@ def print_example_reconstruction(reconstruction, inp, language, selfies=False):
 
     sample_idx = np.random.randint(len(reconstruction))
 
-    reconstructed = crop_start_stop(reconstruction[sample_idx], language)
+    if crop_stop:
+        reconstructed = crop_start_stop(reconstruction[sample_idx], language)
+    else:
+        reconstructed = crop_start(reconstruction[sample_idx], language)
 
     # In padding mode input is tensor
     if isinstance(inp, torch.Tensor):
