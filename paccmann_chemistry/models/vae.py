@@ -4,11 +4,12 @@ from itertools import takewhile
 import torch
 import torch.nn as nn
 
-from .stack_rnn import StackGRU
-from ..utils.search import BeamSearch, SamplingSearch
-from ..utils.hyperparams import OPTIMIZER_FACTORY
+import pytoda
 
 from .. import utils
+from ..utils.hyperparams import OPTIMIZER_FACTORY
+from ..utils.search import BeamSearch, SamplingSearch
+from .stack_rnn import StackGRU
 
 
 class StackGRUEncoder(StackGRU):
@@ -284,8 +285,8 @@ class StackGRUDecoder(StackGRU):
         )
         self.output_layer = nn.Linear(self.rnn_cell_size, self.vocab_size)
 
-        # 0 is padding index.
         self.criterion = nn.CrossEntropyLoss()
+
         self.optimizer = OPTIMIZER_FACTORY[
             params.get('optimizer', 'adadelta')
         ](self.parameters(), lr=params.get('lr', 0.01))  # yapf: disable
@@ -604,7 +605,7 @@ class TeacherVAE(nn.Module):
         prime_input,
         end_token,
         generate_len=100,
-        search=SamplingSearch
+        search=SamplingSearch()
     ):
         """
         Generate SMILES From Latent Z.
@@ -649,6 +650,27 @@ class TeacherVAE(nn.Module):
         molecule_iter = iter(map(torch.tensor, molecule_map))
 
         return molecule_iter
+
+    def _associate_language(self, language):
+        """
+        Bind a SMILES language object to the model.
+
+        Arguments:
+            language  [pytoda.smiles.smiles_language.SMILESLanguage] --
+                A SMILES language object either supporting SMILES or SELFIES
+
+        Raises:
+            TypeError:
+        """
+        if isinstance(language, pytoda.smiles.smiles_language.SMILESLanguage):
+            self.smiles_language = language
+
+        else:
+            raise TypeError(
+                'Please insert a smiles language (object of type '
+                'pytoda.smiles.smiles_language.SMILESLanguage . Given was '
+                f'{type(language)}'
+            )
 
     def save(self, path, *args, **kwargs):
         """Save model to path."""
