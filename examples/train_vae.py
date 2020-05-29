@@ -16,6 +16,7 @@ from paccmann_chemistry.models.training import train_vae
 from paccmann_chemistry.utils.hyperparams import SEARCH_FACTORY
 from pytoda.datasets import SMILESDataset
 from pytoda.smiles.smiles_language import SMILESLanguage
+from torch.utils.tensorboard import SummaryWriter
 import torch
 
 # setup logging
@@ -73,9 +74,12 @@ def main(parser_namespace):
         # get params
         train_smiles_filepath = parser_namespace.train_smiles_filepath
         test_smiles_filepath = parser_namespace.test_smiles_filepath
-        smiles_language_filepath = parser_namespace.smiles_language_filepath
+        smiles_language_filepath = parser_namespace.smiles_language_filepath if parser_namespace.smiles_language_filepath.lower(
+        ) != 'none' else None
         model_path = parser_namespace.model_path
         training_name = parser_namespace.training_name
+
+        writer = SummaryWriter(f'logs/{training_name}')
 
         logger.info(f'Model with name {training_name} starts.')
 
@@ -88,7 +92,11 @@ def main(parser_namespace):
         os.makedirs(val_dir, exist_ok=True)
 
         # Load SMILES language
-        smiles_language = SMILESLanguage.load(smiles_language_filepath)
+        smiles_language = None
+        if smiles_language_filepath is not None:
+            smiles_language = SMILESLanguage.load(smiles_language_filepath)
+
+        logger.info(f'Smiles filepath: {train_smiles_filepath}')
 
         # create SMILES eager dataset
         smiles_train_data = SMILESDataset(
@@ -105,7 +113,7 @@ def main(parser_namespace):
             remove_bonddir=params.get('remove_bonddir', False),
             remove_chirality=params.get('remove_chirality', False),
             backend='lazy',
-            device=device
+            device=device,
         )
         smiles_test_data = SMILESDataset(
             test_smiles_filepath,
@@ -121,13 +129,34 @@ def main(parser_namespace):
             remove_bonddir=params.get('remove_bonddir', False),
             remove_chirality=params.get('remove_chirality', False),
             backend='lazy',
-            device=device
+            device=device,
         )
 
-        params.update({
-            'vocab_size': smiles_language.number_of_tokens,
-            'pad_index': smiles_language.padding_index
-        })  # yapf:disable
+        if smiles_language_filepath is None:
+            smiles_language = smiles_train_data.smiles_language
+            smiles_language.save(
+                os.path.join(model_path, f'{training_name}.lang')
+            )
+
+        params.update(
+            {
+                'vocab_size': smiles_language.number_of_tokens,
+                'pad_index': smiles_language.padding_index
+            }
+        )
+
+        vocab_dict = smiles_language.index_to_token
+        params.update(
+            {
+                'start_index':
+                    list(vocab_dict.keys())
+                    [list(vocab_dict.values()).index('<START>')],
+                'end_index':
+                    list(vocab_dict.keys())
+                    [list(vocab_dict.values()).index('<STOP>')]
+            }
+        )
+
         if params.get('embedding', 'learned') == 'one_hot':
             params.update({'embedding_size': params['vocab_size']})
 
@@ -158,6 +187,17 @@ def main(parser_namespace):
         gru_encoder = StackGRUEncoder(params).to(device)
         gru_decoder = StackGRUDecoder(params).to(device)
         gru_vae = TeacherVAE(gru_encoder, gru_decoder).to(device)
+
+        # TODO I haven't managed to get this to work. I will leave it here
+        # if somewant (or future me) wants to give it a look and get the
+        # tensorboard graph to work
+        if writer and False:
+            gru_vae.set_batch_mode('padded')
+            dummy_input = torch.ones(smiles_train_data[0].shape)
+            dummy_input = dummy_input.unsqueeze(0).to(device)
+            writer.add_graph(gru_vae, (dummy_input, dummy_input, dummy_input))
+            gru_vae.set_batch_mode(params.get('batch_mode'))
+
         logger.info('\n****MODEL SUMMARY***\n')
         for name, parameter in gru_vae.named_parameters():
             logger.info(f'Param {name}, shape:\t{parameter.shape}')
@@ -185,6 +225,21 @@ def main(parser_namespace):
             top_tokens=params.get('top_tokens', 5)
         )  # yapf: disable
 
+        if writer:
+            pparams = params.copy()
+            pparams['training_file'] = train_smiles_filepath
+            pparams['test_file'] = test_smiles_filepath
+            pparams['language_file'] = smiles_language_filepath
+            pparams['model_path'] = model_path
+            pparams = {
+                k: v if v is not None else 'N.A.'
+                for k, v in params.items()
+            }
+            pparams['training_name'] = training_name
+            from pprint import pprint
+            pprint(pparams)
+            writer.add_hparams(hparam_dict=pparams, metric_dict={})
+
         for epoch in range(params['epochs'] + 1):
             t = time()
             loss_tracker = train_vae(
@@ -206,6 +261,7 @@ def main(parser_namespace):
                 eval_interval=params['eval_interval'],
                 loss_tracker=loss_tracker,
                 logger=logger,
+                writer=writer,
                 batch_mode=params.get('batch_mode')
             )
             logger.info(f'Epoch {epoch}, took {time() - t:.1f}.')

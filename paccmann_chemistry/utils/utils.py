@@ -338,4 +338,4 @@ def print_example_reconstruction(
     pred = _fn(reconstructed)
     target = _fn(sample)
 
-    return f'Sample input:\n\t {target}, model reconstructed:\n\t {pred}'
+    return target, pred
