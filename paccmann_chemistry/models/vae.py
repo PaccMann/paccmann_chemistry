@@ -339,8 +339,8 @@ class StackGRUDecoder(StackGRU):
             output, hidden, stack = self(
                 input_entry.unsqueeze(0), hidden, stack
             )
-            output = self.output_layer(output).squeeze()
-            loss += self.criterion(output, target_entry.squeeze())
+            output = self.output_layer(output).squeeze(dim=0)
+            loss += self.criterion(output, target_entry)
             outputs.append(output)
 
         # For monitoring purposes
@@ -381,9 +381,8 @@ class StackGRUDecoder(StackGRU):
             output, hidden, stack = self(
                 input_entry.unsqueeze(0), hidden.contiguous(), stack
             )
-            output = self.output_layer(output).squeeze()
-            if len(output.shape) < 2:
-                output = output.unsqueeze(0)
+            output = self.output_layer(output).squeeze(dim=0)
+
             loss += self.criterion(output, target_entry)
             outputs.append(torch.argmax(output, -1))
         self.outputs = utils.packed_to_padded(outputs, target_seq_packed)
@@ -457,7 +456,7 @@ class StackGRUDecoder(StackGRU):
             if not is_beam:
                 output, hidden, stack = self(input_token, hidden, stack)
 
-                logits = self.output_layer(output).squeeze()
+                logits = self.output_layer(output).squeeze(dim=0)
                 top_idx = search.step(logits)
 
                 input_token = top_idx.view(1, -1).to(self.device)
