@@ -187,17 +187,15 @@ def main(parser_namespace):
         gru_encoder = StackGRUEncoder(params).to(device)
         gru_decoder = StackGRUDecoder(params).to(device)
         gru_vae = TeacherVAE(gru_encoder, gru_decoder).to(device)
-
         # TODO I haven't managed to get this to work. I will leave it here
         # if somewant (or future me) wants to give it a look and get the
         # tensorboard graph to work
-        if writer and False:
-            gru_vae.set_batch_mode('padded')
-            dummy_input = torch.ones(smiles_train_data[0].shape)
-            dummy_input = dummy_input.unsqueeze(0).to(device)
-            writer.add_graph(gru_vae, (dummy_input, dummy_input, dummy_input))
-            gru_vae.set_batch_mode(params.get('batch_mode'))
-
+        # if writer and False:
+        #     gru_vae.set_batch_mode('padded')
+        #     dummy_input = torch.ones(smiles_train_data[0].shape)
+        #     dummy_input = dummy_input.unsqueeze(0).to(device)
+        #     writer.add_graph(gru_vae, (dummy_input, dummy_input, dummy_input))
+        #     gru_vae.set_batch_mode(params.get('batch_mode'))
         logger.info('\n****MODEL SUMMARY***\n')
         for name, parameter in gru_vae.named_parameters():
             logger.info(f'Param {name}, shape:\t{parameter.shape}')
@@ -261,7 +259,7 @@ def main(parser_namespace):
                 eval_interval=params['eval_interval'],
                 loss_tracker=loss_tracker,
                 logger=logger,
-                writer=writer,
+                # writer=writer,
                 batch_mode=params.get('batch_mode')
             )
             logger.info(f'Epoch {epoch}, took {time() - t:.1f}.')
