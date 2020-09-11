@@ -153,7 +153,7 @@ class testTeacherVAE(unittest.TestCase):
         'dropout': .7
     }
     use_stacks = [True, False]
-    gen_lens = [50, 200]
+    gen_lens = [50]
     bidirectionals = ['True', 'False']
     n_layerss = [2]
     batch_sizes = [8, 128]
@@ -162,6 +162,8 @@ class testTeacherVAE(unittest.TestCase):
     beam_sizes = [2, 8]
     top_tokenss = [5, 30]
     batch_modes = ['Padded', 'Packed']
+    start_index = 2
+    stop_index = 3
 
     def test_speed(self):
 
@@ -183,7 +185,7 @@ class testTeacherVAE(unittest.TestCase):
             logger.info(
                 f'\tMode {self.batch_mode}, Stack: {self.use_stack}, '
                 f'bidirectional: {self.bidirectional}'
-                f' SeqLen:{self.gen_lens[1]}, '
+                f' SeqLen:{self.gen_lens[-1]}, '
                 f'layers: {self.n_layers}, batch_size:'
                 f' {self.bs}, RNN: {self.rnn}, Vocab: {self.vocab_size}\n'
                 f'Setup: {self.setup-self.start:.3f}, Encoder:'
@@ -213,8 +215,9 @@ class testTeacherVAE(unittest.TestCase):
 
                                 # Update params
                                 p = _update_params()
-                                enc_in = torch.rand(self.gen_lens[1],
-                                                    self.bs).long()
+                                enc_in = torch.rand(
+                                    self.gen_lens[-1], self.bs
+                                ).long()
                                 lat = torch.rand(self.bs, p['latent_dim'])
                                 prime = torch.Tensor([2])
 
@@ -266,8 +269,8 @@ class testTeacherVAE(unittest.TestCase):
                         enc = StackGRUEncoder(p)
                         dec = StackGRUDecoder(p)
                         self.vae = TeacherVAE(enc, dec)
-                        self.lat = torch.randn(self.bs, p['latent_dim'])
-                        self.prime = torch.Tensor([2]).long()
+                        self.lat = torch.randn(1, self.bs, p['latent_dim'])
+                        self.prime = torch.Tensor([self.start_index]).long()
 
                         if self.search == BeamSearch:
                             for self.beam_size in self.beam_sizes:
@@ -281,7 +284,7 @@ class testTeacherVAE(unittest.TestCase):
         logger.info('\nTesting Pack vs Pad')
 
         n_layerss = [2, 4]
-        batch_sizes = [8, 128]
+        batch_sizes = [64]
         rnns = [32, 128]
         vocab_sizes = [20, 100]
         batch_modes = ['Padded', 'Packed']
@@ -304,7 +307,7 @@ class testTeacherVAE(unittest.TestCase):
             logger.info(
                 f'\tMode {self.batch_mode}, Stack: {self.use_stack}, '
                 f'bidirectional: {self.bidirectional}'
-                f' SeqLen:{self.gen_lens[1]}, '
+                f' SeqLen:{self.gen_lens[-1]}, '
                 f'layers: {self.n_layers}, batch_size:'
                 f' {self.bs}, RNN: {self.rnn}, Vocab: {self.vocab_size}\n'
                 f'Setup: {self.setup-self.start:.3f}, '
@@ -324,16 +327,15 @@ class testTeacherVAE(unittest.TestCase):
 
                             # Update params
                             p = _update_params()
-
                             batch = [
                                 torch.tensor(
-                                    [
-                                        np.random.randint(1, 20)
+                                    [self.start_index] + [
+                                        np.random.randint(4, 20)
                                         for _ in range(
                                             np.random.
-                                            randint(3, self.gen_lens[1])
+                                            randint(3, self.gen_lens[-1])
                                         )
-                                    ]
+                                    ] + [self.stop_index]
                                 ).long() for _ in range(self.bs)
                             ]
                             batch = sorted(

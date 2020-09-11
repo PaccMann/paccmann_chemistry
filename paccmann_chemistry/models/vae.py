@@ -4,11 +4,12 @@ from itertools import takewhile
 import torch
 import torch.nn as nn
 
-from .stack_rnn import StackGRU
-from ..utils.search import BeamSearch, SamplingSearch
-from ..utils.hyperparams import OPTIMIZER_FACTORY
+import pytoda
 
 from .. import utils
+from ..utils.hyperparams import OPTIMIZER_FACTORY
+from ..utils.search import BeamSearch, SamplingSearch
+from .stack_rnn import StackGRU
 
 
 class StackGRUEncoder(StackGRU):
@@ -161,7 +162,6 @@ class StackGRUEncoder(StackGRU):
 
         prev_batch = batch_sizes[0]
 
-        # TODO this will break now without the packed mode
         for input_entry, batch_size in zip(input_seq_packed, batch_sizes):
             final_hidden, hidden = utils.manage_step_packed_vars(
                 final_hidden, hidden, batch_size, prev_batch, batch_dim=1
@@ -171,7 +171,7 @@ class StackGRUEncoder(StackGRU):
             )
             prev_batch = batch_size
             output, hidden, stack = self(
-                input_entry.unsqueeze(0), hidden, stack
+                input_entry.unsqueeze(0), hidden.contiguous(), stack
             )
 
         left_dims = hidden.shape[1]
@@ -286,6 +286,7 @@ class StackGRUDecoder(StackGRU):
         self.output_layer = nn.Linear(self.rnn_cell_size, self.vocab_size)
 
         self.criterion = nn.CrossEntropyLoss()
+
         self.optimizer = OPTIMIZER_FACTORY[
             params.get('optimizer', 'adadelta')
         ](self.parameters(), lr=params.get('lr', 0.01))  # yapf: disable
@@ -333,16 +334,18 @@ class StackGRUDecoder(StackGRU):
 
         loss = 0
         outputs = []
-        for input_entry, target_entry in zip(input_seq, target_seq):
+        for idx, (input_entry,
+                  target_entry) in enumerate(zip(input_seq, target_seq)):
             output, hidden, stack = self(
                 input_entry.unsqueeze(0), hidden, stack
             )
-            output = self.output_layer(output).squeeze()
-            loss += self.criterion(output, target_entry.squeeze())
+            output = self.output_layer(output).squeeze(dim=0)
+            loss += self.criterion(output, target_entry)
             outputs.append(output)
 
         # For monitoring purposes
-        self.outputs = torch.argmax(torch.stack(outputs, -1), 1)
+        outputs = torch.stack(outputs, -1)
+        self.outputs = torch.argmax(outputs, 1)
 
         return loss
 
@@ -361,11 +364,11 @@ class StackGRUDecoder(StackGRU):
         loss = 0
         input_seq_packed, batch_sizes = utils.perpare_packed_input(input_seq)
         # Target sequence should have same batch_sizes as input_seq
-        input_seq_packed, _ = utils.perpare_packed_input(target_seq)
+        target_seq_packed, _ = utils.perpare_packed_input(target_seq)
         prev_batch = batch_sizes[0]
-
-        for input_entry, target_entry, batch_size in zip(
-            input_seq_packed, input_seq_packed, batch_sizes
+        outputs = []
+        for idx, (input_entry, target_entry, batch_size) in enumerate(
+            zip(input_seq_packed, target_seq_packed, batch_sizes)
         ):
             _, hidden = utils.manage_step_packed_vars(
                 None, hidden, batch_size, prev_batch, batch_dim=1
@@ -373,14 +376,16 @@ class StackGRUDecoder(StackGRU):
             _, stack = utils.manage_step_packed_vars(
                 None, stack, batch_size, prev_batch, batch_dim=0
             )
+
             prev_batch = batch_size
             output, hidden, stack = self(
-                input_entry.unsqueeze(0), hidden, stack
+                input_entry.unsqueeze(0), hidden.contiguous(), stack
             )
-            output = self.output_layer(output).squeeze()
-            if len(output.shape) < 2:
-                output = output.unsqueeze(0)
+            output = self.output_layer(output).squeeze(dim=0)
+
             loss += self.criterion(output, target_entry)
+            outputs.append(torch.argmax(output, -1))
+        self.outputs = utils.packed_to_padded(outputs, target_seq_packed)
         return loss
 
     def generate_from_latent(
@@ -414,13 +419,14 @@ class StackGRUDecoder(StackGRU):
         Note: For each generated sequence all indices after the first
             end_token must be discarded.
         """
-        n_layers = self.n_layers
-        latent_z = latent_z.repeat(n_layers, 1, 1)
-        hidden = self.latent_to_hidden(latent_z)
-        batch_size = hidden.shape[1]
+        batch_size = latent_z.shape[1]
         self._update_batch_size(batch_size)
 
+        latent_z = latent_z.repeat(self.n_layers, 1, 1)
+
+        hidden = self.latent_to_hidden(latent_z)
         stack = self.init_stack
+
         generated_seq = prime_input.repeat(batch_size, 1)
         prime_input = generated_seq.transpose(1, 0).unsqueeze(1)
 
@@ -446,14 +452,17 @@ class StackGRUDecoder(StackGRU):
                 [stack.clone() for _ in range(search.beam_width - 1)]
             )
 
-        for _ in range(generate_len):
+        for idx in range(generate_len):
             if not is_beam:
                 output, hidden, stack = self(input_token, hidden, stack)
-                logits = self.output_layer(output).squeeze()
+
+                logits = self.output_layer(output).squeeze(dim=0)
                 top_idx = search.step(logits)
-                # add generated_seq character to string and use as next input
-                generated_seq = torch.cat((generated_seq, top_idx), dim=1)
+
                 input_token = top_idx.view(1, -1).to(self.device)
+
+                generated_seq = torch.cat((generated_seq, top_idx), dim=1)
+
                 # if we don't generate in batches, we can do early stopping.
                 if batch_size == 1 and top_idx == end_token:
                     break
@@ -528,7 +537,7 @@ class TeacherVAE(nn.Module):
         """
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
-        return eps.mul(std).add_(mu)
+        return eps.mul(std).add_(mu)  # if self.training else mu
 
     def decode(self, latent_z, input_seq, target_seq):
         """
@@ -595,7 +604,7 @@ class TeacherVAE(nn.Module):
         prime_input,
         end_token,
         generate_len=100,
-        search=SamplingSearch
+        search=SamplingSearch()
     ):
         """
         Generate SMILES From Latent Z.
@@ -632,7 +641,7 @@ class TeacherVAE(nn.Module):
         )
 
         molecule_gen = (
-            takewhile(lambda x: x != end_token.cpu(), molecule[1:])
+            takewhile(lambda x: x != end_token.cpu(), molecule[1:].cpu())
             for molecule in generated_batch
         )   # yapf: disable
 
@@ -640,6 +649,27 @@ class TeacherVAE(nn.Module):
         molecule_iter = iter(map(torch.tensor, molecule_map))
 
         return molecule_iter
+
+    def _associate_language(self, language):
+        """
+        Bind a SMILES language object to the model.
+
+        Arguments:
+            language  [pytoda.smiles.smiles_language.SMILESLanguage] --
+                A SMILES language object either supporting SMILES or SELFIES
+
+        Raises:
+            TypeError:
+        """
+        if isinstance(language, pytoda.smiles.smiles_language.SMILESLanguage):
+            self.smiles_language = language
+
+        else:
+            raise TypeError(
+                'Please insert a smiles language (object of type '
+                'pytoda.smiles.smiles_language.SMILESLanguage . Given was '
+                f'{type(language)}'
+            )
 
     def save(self, path, *args, **kwargs):
         """Save model to path."""
