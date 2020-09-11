@@ -339,3 +339,12 @@ def print_example_reconstruction(
     target = _fn(sample)
 
     return target, pred
+
+
+def disable_rdkit_logging():
+    """
+    Disables RDKit whiny logging.
+    """
+    logger = rkl.logger()
+    logger.setLevel(rkl.ERROR)
+    rkrb.DisableLog('rdApp.error')

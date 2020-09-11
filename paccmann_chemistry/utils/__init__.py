@@ -12,5 +12,6 @@ from .utils import (  # noqa
     to_np,
     print_example_reconstruction,
     crop_start_stop,
-    packed_to_padded
+    packed_to_padded,
+    disable_rdkit_logging
 )
