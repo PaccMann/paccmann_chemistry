@@ -157,11 +157,15 @@ def train_vae(
         torch.cuda.empty_cache()
 
         if writer:
-            writer.add_scalar('train/loss', loss.item(), global_step=global_step)
+            writer.add_scalar(
+                'train/loss', loss.item(), global_step=global_step
+            )
             writer.add_scalar(
                 'train/loss_dec', loss.item(), global_step=global_step
             )
-            writer.add_scalar('train/kl_div', loss.item(), global_step=global_step)
+            writer.add_scalar(
+                'train/kl_div', loss.item(), global_step=global_step
+            )
 
         if _iter and _iter % log_interval == 0:
             logger.info(
@@ -180,9 +184,9 @@ def train_vae(
             )
             if writer:
                 writer.add_text(
-                        'mol/train/reconstructed',
-                        f'Sample\t{target}\nReconstr:\t{pred}',
-                        global_step=global_step
+                    'mol/train/reconstructed',
+                    f'Sample\t{target}\nReconstr:\t{pred}',
+                    global_step=global_step
                 )
                 mol = Chem.MolFromSmiles(target)
                 molt = Chem.MolFromSmiles(pred)
@@ -231,9 +235,7 @@ def train_vae(
 
             if writer:
                 writer.add_text(
-                        'mol/test/generated',
-                        f'{mol}',
-                        global_step=global_step
+                    'mol/test/generated', f'{mol}', global_step=global_step
                 )
                 mol = Chem.MolFromSmiles(mol)
                 if mol:
@@ -244,14 +246,13 @@ def train_vae(
                         global_step=global_step
                     )
             target, pred = print_example_reconstruction(
-                    vae_model.decoder.outputs, target_seq, smiles_language,
-                    selfies
+                vae_model.decoder.outputs, target_seq, smiles_language, selfies
             )
             if writer:
                 writer.add_text(
-                        'mol/test/reconstructed',
-                        f'Sample\t{target}\nReconstr:\t{pred}',
-                        global_step=global_step
+                    'mol/test/reconstructed',
+                    f'Sample\t{target}\nReconstr:\t{pred}',
+                    global_step=global_step
                 )
                 mol = Chem.MolFromSmiles(target)
                 molt = Chem.MolFromSmiles(pred)
@@ -273,11 +274,15 @@ def train_vae(
             )
             vae_model.train()
             if writer:
-                writer.add_scalar('test/loss', test_loss, global_step=global_step)
+                writer.add_scalar(
+                    'test/loss', test_loss, global_step=global_step
+                )
                 writer.add_scalar(
                     'test/loss_dec', test_rec, global_step=global_step
                 )
-                writer.add_scalar('test/kl_div', test_kld, global_step=global_step)
+                writer.add_scalar(
+                    'test/kl_div', test_kld, global_step=global_step
+                )
             if test_loss < loss_tracker['test_loss_a']:
                 loss_tracker.update(
                     {

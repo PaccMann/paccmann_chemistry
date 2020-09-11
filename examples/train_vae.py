@@ -6,9 +6,9 @@ import logging
 import os
 import sys
 from time import time
-import rdkit.rdBase as rkrb
-import rdkit.RDLogger as rkl
-from paccmann_chemistry.utils import collate_fn, get_device
+from paccmann_chemistry.utils import (
+    collate_fn, get_device, disable_rdkit_logging
+)
 from paccmann_chemistry.models.vae import (
     StackGRUDecoder, StackGRUEncoder, TeacherVAE
 )
@@ -22,16 +22,6 @@ import torch
 # setup logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger('training_vae')
-
-
-def disable_rdkit_logging():
-    """
-    Disables RDKit whiny logging.
-    """
-    logger = rkl.logger()
-    logger.setLevel(rkl.ERROR)
-    rkrb.DisableLog('rdApp.error')
-
 
 # yapf: disable
 parser = argparse.ArgumentParser(description='Chemistry VAE training script.')
@@ -74,8 +64,12 @@ def main(parser_namespace):
         # get params
         train_smiles_filepath = parser_namespace.train_smiles_filepath
         test_smiles_filepath = parser_namespace.test_smiles_filepath
-        smiles_language_filepath = parser_namespace.smiles_language_filepath if parser_namespace.smiles_language_filepath.lower(
-        ) != 'none' else None
+        smiles_language_filepath = (
+            parser_namespace.smiles_language_filepath
+            if parser_namespace.smiles_language_filepath.lower() != 'none' else
+            None
+        )
+
         model_path = parser_namespace.model_path
         training_name = parser_namespace.training_name
 
