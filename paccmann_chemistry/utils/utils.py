@@ -6,7 +6,8 @@ import math
 import numpy as np
 import torch
 from torch.distributions.bernoulli import Bernoulli
-
+import rdkit.rdBase as rkrb
+import rdkit.RDLogger as rkl
 import pytoda
 from pytoda.transforms import Compose
 
