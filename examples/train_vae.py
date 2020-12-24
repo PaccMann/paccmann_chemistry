@@ -131,6 +131,11 @@ def main(parser_namespace):
             smiles_language.save(
                 os.path.join(model_path, f'{training_name}.lang')
             )
+        else:
+            smiles_language_filename = os.path.basename(smiles_language_filepath)
+            smiles_language.save(
+                os.path.join(model_dir, smiles_language_filename)
+            )
 
         params.update(
             {
