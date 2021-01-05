@@ -90,17 +90,24 @@ class GreedySearch(Search):
 class SamplingSearch(Search):
     """"Sampling search."""
 
-    def __init__(self, temperature: float = 1.0, *args, **kwargs):
+    def __init__(
+        self, temperature: float = 1.0, seed: int = -1, *args, **kwargs
+    ):
         """
         Initialize the sampling search.
 
         Args:
             temperature (float, optional): temperature parameter. Defaults to
                 1.0, a.k.a., no temperature. Temperature < 1 results in a more
-                descriminative softmax, > 1 in a flatter distribution.
+                discriminative softmax, > 1 in a flatter distribution.
+            seed (int, optional): Torch random seed. Defaults to -1 in which
+                case no seed is set. If any other value is used, seed is set
+                before every sampling step.
         """
         super().__init__(*args, **kwargs)
         self.temperature = temperature
+        self.seed = seed
+        self.use_seed = not seed == -1
 
     def forward(self, logits: torch.Tensor) -> torch.Tensor:
         """
@@ -114,6 +121,8 @@ class SamplingSearch(Search):
         """
         super().forward(logits)
         probabilities = torch.softmax(logits.div(self.temperature), 2)
+        if self.use_seed:
+            torch.manual_seed(self.seed)
         return torch.stack(
             [
                 torch.multinomial(probability, 1)
@@ -133,6 +142,8 @@ class SamplingSearch(Search):
         """
         super().step(logits)
         probabilities = torch.softmax(logits.div(self.temperature), 1)
+        if self.use_seed:
+            torch.manual_seed(self.seed)
         return torch.stack(
             [
                 torch.multinomial(probability, 1)
