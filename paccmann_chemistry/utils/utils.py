@@ -2,15 +2,15 @@
 import copy
 import logging
 import math
+from typing import Union, Tuple
 
 import numpy as np
+import pytoda
 import rdkit.rdBase as rkrb
 import rdkit.RDLogger as rkl
 import torch
-from torch.distributions.bernoulli import Bernoulli
-
-import pytoda
 from pytoda.transforms import Compose
+from torch.distributions.bernoulli import Bernoulli
 
 logger = logging.getLogger(__name__)
 
@@ -300,19 +300,28 @@ def crop_start(smiles, smiles_language):
 
 
 def print_example_reconstruction(
-    reconstruction, inp, language, selfies=False, crop_stop=True
-):
-    """[summary]
+    reconstruction: torch.Tensor,
+    inp: Union[torch.Tensor, list],
+    language,
+    selfies: bool = False,
+    crop_stop: bool = True
+) -> Tuple[str, str]:
+    """
+    Converts tensorial input and reconstructions to readable SMILES
+        to be logged.
 
     Arguments:
-        reconstruction {[type]} -- [description]
-        inp {[type]} -- [description]
-        language -- SMILES or ProteinLanguage object
+        reconstruction (torch.Tensor): Tensor with reconstruction
+        inp (Union[torch.Tensor, list]): Tensor or list with input
+        language: SMILES or ProteinLanguage object
+        selfies (bool): Whether the representation is a SELFIES (default: True).
+        crop_stop (bool): Whether mols should be cropped at stop token
+            (default: True).
     Raises:
-        TypeError: [description]
+        TypeError: If unknown language or inp is given.
 
     Returns:
-        [type] -- [description]
+        Tuple[str, str]: target and prediction, both as SMILES.
     """
     if isinstance(language, pytoda.smiles.SMILESLanguage):
         _fn = language.token_indexes_to_smiles
