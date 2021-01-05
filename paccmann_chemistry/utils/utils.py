@@ -4,6 +4,8 @@ import logging
 import math
 
 import numpy as np
+import rdkit.rdBase as rkrb
+import rdkit.RDLogger as rkl
 import torch
 from torch.distributions.bernoulli import Bernoulli
 
