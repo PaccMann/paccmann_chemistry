@@ -14,8 +14,8 @@ from paccmann_chemistry.models.vae import (
 )
 from paccmann_chemistry.models.training import train_vae
 from paccmann_chemistry.utils.hyperparams import SEARCH_FACTORY
-from pytoda.datasets import SMILESDataset
-from pytoda.smiles.smiles_language import SMILESLanguage
+from pytoda.datasets import SMILESTokenizerDataset
+from pytoda.smiles.smiles_language import SMILESTokenizer
 from torch.utils.tensorboard import SummaryWriter
 import torch
 
@@ -34,8 +34,8 @@ parser.add_argument(
     help='Path to the test data file (.smi).'
 )
 parser.add_argument(
-    'smiles_language_filepath', type=str,
-    help='Path to SMILES language object.'
+    'selfies_language_vocab_path', type=str,
+    help='Path to vocabulary of a SELFIES language object.'
 )
 parser.add_argument(
     'model_path', type=str,
@@ -64,11 +64,7 @@ def main(parser_namespace):
         # get params
         train_smiles_filepath = parser_namespace.train_smiles_filepath
         test_smiles_filepath = parser_namespace.test_smiles_filepath
-        smiles_language_filepath = (
-            parser_namespace.smiles_language_filepath
-            if parser_namespace.smiles_language_filepath.lower() != 'none' else
-            None
-        )
+        selfies_language_vocab_path = parser_namespace.selfies_language_vocab_path
 
         model_path = parser_namespace.model_path
         training_name = parser_namespace.training_name
@@ -85,68 +81,50 @@ def main(parser_namespace):
         os.makedirs(log_path, exist_ok=True)
         os.makedirs(val_dir, exist_ok=True)
 
-        # Load SMILES language
-        smiles_language = None
-        if smiles_language_filepath is not None:
-            smiles_language = SMILESLanguage.load(smiles_language_filepath)
-
         logger.info(f'Smiles filepath: {train_smiles_filepath}')
 
-        # create SMILES eager dataset
-        smiles_train_data = SMILESDataset(
+        # Load SELFIES language
+        selfies_language = SMILESTokenizer(
+            name='selfies-language',
+            vocab_file=selfies_language_vocab_path,
+            tokenizer_name='selfies',
+            padding=False,  # We use packed sequences
+            selfies=True,  # Must be true
+            add_start_and_stop=params.get('add_start_stop_token', True),
+            augment=params.get('augment_smiles', False),
+            canonical=params.get('canonical', False),
+            kekulize=params.get('kekulize', False),
+            all_bonds_explicit=params.get('all_bonds_explicit', False),
+            all_hs_explicit=params.get('all_hs_explicit', False),
+            remove_bonddir=params.get('remove_bonddir', False),
+            remove_chirality=params.get('remove_chirality', False)
+        )
+
+        # Create dataset
+        smiles_train_data = SMILESTokenizerDataset(
             train_smiles_filepath,
-            smiles_language=smiles_language,
-            padding=False,
-            selfies=params.get('selfies', False),
-            add_start_and_stop=params.get('add_start_stop_token', True),
-            augment=params.get('augment_smiles', False),
-            canonical=params.get('canonical', False),
-            kekulize=params.get('kekulize', False),
-            all_bonds_explicit=params.get('all_bonds_explicit', False),
-            all_hs_explicit=params.get('all_hs_explicit', False),
-            remove_bonddir=params.get('remove_bonddir', False),
-            remove_chirality=params.get('remove_chirality', False),
+            smiles_language=selfies_language,
             backend='lazy',
             device=device,
+            iterate_dataset=params.get('iterate_dataset', False)
         )
-        smiles_test_data = SMILESDataset(
+        smiles_test_data = SMILESTokenizerDataset(
             test_smiles_filepath,
-            smiles_language=smiles_language,
-            padding=False,
-            selfies=params.get('selfies', False),
-            add_start_and_stop=params.get('add_start_stop_token', True),
-            augment=params.get('augment_smiles', False),
-            canonical=params.get('canonical', False),
-            kekulize=params.get('kekulize', False),
-            all_bonds_explicit=params.get('all_bonds_explicit', False),
-            all_hs_explicit=params.get('all_hs_explicit', False),
-            remove_bonddir=params.get('remove_bonddir', False),
-            remove_chirality=params.get('remove_chirality', False),
+            smiles_language=selfies_language,
             backend='lazy',
             device=device,
+            iterate_dataset=params.get('iterate_dataset', False)
         )
 
-        if smiles_language_filepath is None:
-            smiles_language = smiles_train_data.smiles_language
-            smiles_language.save(
-                os.path.join(model_path, f'{training_name}.lang')
-            )
-        else:
-            smiles_language_filename = os.path.basename(
-                smiles_language_filepath
-            )
-            smiles_language.save(
-                os.path.join(model_dir, smiles_language_filename)
-            )
-
-        params.update(
-            {
-                'vocab_size': smiles_language.number_of_tokens,
-                'pad_index': smiles_language.padding_index
-            }
+        # Dump selfies language
+        selfies_language_filepath = os.path.join(
+            model_dir, os.path.basename(selfies_language_vocab_path)
         )
+        selfies_language.save_pretrained(selfies_language_filepath)
 
-        vocab_dict = smiles_language.index_to_token
+        params.update({'vocab_size': selfies_language.number_of_tokens})
+
+        vocab_dict = selfies_language.index_to_token
         params.update(
             {
                 'start_index':
@@ -228,7 +206,7 @@ def main(parser_namespace):
             pparams = params.copy()
             pparams['training_file'] = train_smiles_filepath
             pparams['test_file'] = test_smiles_filepath
-            pparams['language_file'] = smiles_language_filepath
+            pparams['language_file'] = selfies_language_filepath
             pparams['model_path'] = model_path
             pparams = {
                 k: v if v is not None else 'N.A.'
@@ -246,7 +224,7 @@ def main(parser_namespace):
                 gru_vae,
                 train_data_loader,
                 test_data_loader,
-                smiles_language,
+                selfies_language,
                 model_dir,
                 search=decoder_search,
                 optimizer=params.get('optimizer', 'adadelta'),

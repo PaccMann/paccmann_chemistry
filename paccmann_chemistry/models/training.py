@@ -124,7 +124,6 @@ def train_vae(
         }
 
     device = get_device()
-    selfies = train_dataloader.dataset._dataset.selfies
     data_preparation = get_data_preparation(batch_mode)
     vae_model = model.to(device)
     vae_model.train()
@@ -180,7 +179,10 @@ def train_vae(
                 target_seq = unpack_sequence(target_seq)
 
             target, pred = print_example_reconstruction(
-                vae_model.decoder.outputs, target_seq, smiles_language, selfies
+                vae_model.decoder.outputs,
+                target_seq,
+                smiles_language,
+                selfies=True
             )
             if writer:
                 writer.add_text(
@@ -229,8 +231,8 @@ def train_vae(
             mol = smiles_language.token_indexes_to_smiles(
                 crop_start_stop(mol, smiles_language)
             )
-            # SELFIES conversion if necessary
-            mol = smiles_language.selfies_to_smiles(mol) if selfies else mol
+            # SELFIES conversion
+            mol = smiles_language.selfies_to_smiles(mol)
             logger.info(f'\nSample Generated Molecule:\n{mol}')
 
             if writer:
@@ -246,7 +248,10 @@ def train_vae(
                         global_step=global_step
                     )
             target, pred = print_example_reconstruction(
-                vae_model.decoder.outputs, target_seq, smiles_language, selfies
+                vae_model.decoder.outputs,
+                target_seq,
+                smiles_language,
+                selfies=True
             )
             if writer:
                 writer.add_text(
@@ -300,7 +305,7 @@ def train_vae(
 
             if test_rec < loss_tracker['test_rec_a']:
                 loss_tracker.update({'test_rec_a': test_rec, 'ep_rec': epoch})
-                vae_model.save(os.path.join(model_dir, f'weights/best_rec.pt'))
+                vae_model.save(os.path.join(model_dir, 'weights/best_rec.pt'))
                 logger.info(
                     f'Epoch {epoch}. NEW best reconstruction loss = '
                     f'{test_rec:.4f} \t (Loss = {test_loss:.4f}, KLD = '
@@ -308,7 +313,7 @@ def train_vae(
                 )
             if test_kld < loss_tracker['test_kld_a']:
                 loss_tracker.update({'test_kld_a': test_kld, 'ep_kld': epoch})
-                vae_model.save(os.path.join(model_dir, f'weights/best_kld.pt'))
+                vae_model.save(os.path.join(model_dir, 'weights/best_kld.pt'))
                 logger.info(
                     f'Epoch {epoch}. NEW best KLD = {test_kld:.4f} \t (loss '
                     f'= {test_loss:.4f}, Reconstruction = {test_rec:.4f}).'
