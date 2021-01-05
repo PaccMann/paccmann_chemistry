@@ -5,6 +5,8 @@ import os
 import sys
 import argparse
 import torch
+from pytoda.files import read_smi
+import pandas as pd
 
 from paccmann_chemistry.models.training import get_data_preparation
 from paccmann_chemistry.models.vae import (
@@ -54,13 +56,15 @@ def main(parser_namespace):
     data_preparation = get_data_preparation(params.get('batch_mode'))
     device = get_device()
 
+    print('Selfies', params.get('selfies', False))
+
     dataset = SMILESDataset(
         data_path,
         smiles_language=smiles_language,
         padding=False,
         selfies=params.get('selfies', False),
         add_start_and_stop=params.get('add_start_stop_token', True),
-        augment=False,  #params.get('augment_smiles', False),
+        augment=False,
         canonical=params.get('canonical', False),
         kekulize=params.get('kekulize', False),
         all_bonds_explicit=params.get('all_bonds_explicit', False),
@@ -75,8 +79,8 @@ def main(parser_namespace):
         dataset,
         batch_size=params.get('batch_size', 64),
         collate_fn=collate_fn,
-        drop_last=True,
-        shuffle=True,
+        drop_last=False,
+        shuffle=False,
         pin_memory=params.get('pin_memory', True),
         num_workers=params.get('num_workers', 8)
     )
@@ -108,7 +112,6 @@ def main(parser_namespace):
 
     gru_vae.eval()
     gru_vae.to(device)
-
     counter = 0
     with torch.no_grad():
         latent_code = []
@@ -163,14 +166,32 @@ def main(parser_namespace):
                         device=device
                     )
                     mu, logvar = gru_vae.encode(encoder_seq)
-            for _mu in mu.tolist():
-                latent_code.append([counter, _mu])
+            for _mu, _logvar in zip(mu, logvar):
+                latent = torch.exp(0.5 * _logvar) + _mu
+                latent_code.append([counter, _mu, _logvar, latent])
                 counter += 1
+
+    idxs, mus, logvars, latents = zip(*latent_code)
+    mu, logvar, latent = (
+        torch.stack(mus), torch.stack(logvars), torch.stack(latents)
+    )
+    data = read_smi(data_path)
+    df = pd.DataFrame(
+        {
+            'Compound': data.index.tolist(),
+            'SMILES': data['SMILES'].tolist()
+        }
+    )
+    for var, name in zip([mu.T, logvar.T, latent.T], ['mu', 'logvar', 'z']):
+        for idx in range(len(var)):
+            df[name + '_' + str(idx)] = var[idx].tolist()
 
     LATENT_CODE_PATH = os.path.join(
         os.path.dirname(data_path), 'samples_latent_code.tsv'
     )
+    df.to_csv(LATENT_CODE_PATH)
 
-    with open(LATENT_CODE_PATH, 'w') as f:
-        for i, mu in latent_code:
-            f.write(f'{i}\t{",".join([str(x) for x in mu[0]])}\n')
+
+if __name__ == '__main__':
+    args = parser.parse_args()
+    main(parser_namespace=args)
