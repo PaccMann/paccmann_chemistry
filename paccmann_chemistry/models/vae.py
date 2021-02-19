@@ -537,7 +537,7 @@ class TeacherVAE(nn.Module):
         """
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
-        return eps.mul(std).add_(mu)  # if self.training else mu
+        return eps.mul(std).add_(mu) if self.training else mu
 
     def decode(self, latent_z, input_seq, target_seq):
         """
