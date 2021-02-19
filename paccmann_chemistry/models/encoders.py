@@ -46,6 +46,9 @@ class ConvEncoder(Encoder):
         super(ConvEncoder, self).__init__(*args, **kwargs)
         self.device = get_device()
 
+        if params.get('batch_mode', 'Padded') == 'Packed':
+            raise ValueError('Conv Encoder cant work with packed seqs.')
+
         self.padding_length = params.get('padding_length', 120)
         self.filters = params.get('filters', [9, 9, 11])
         self.embedding_size = params['embedding_size']
@@ -142,6 +145,7 @@ class ConvEncoder(Encoder):
 
 
 class GentrlGRUEncoder(nn.Module):
+    """GRU Encoder following GENTRL"""
 
     def __init__(
         self,
@@ -153,6 +157,9 @@ class GentrlGRUEncoder(nn.Module):
         **kwargs
     ):
         super(GentrlGRUEncoder, self).__init__()
+
+        if params.get('batch_mode', 'Padded') == 'Packed':
+            raise ValueError('Packed mode not implemented for GentrlGRU')
 
         self.bidirectional = params.get('bidirectional', False)
         self.latent_size = params['latent_size']
