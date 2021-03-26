@@ -1,7 +1,9 @@
 [![Build Status](https://travis-ci.org/PaccMann/paccmann_chemistry.svg?branch=master)](https://travis-ci.org/PaccMann/paccmann_chemistry)
 # paccmann_chemistry
 
-Generative models of chemical data for PaccMann^RL.
+Generative models of chemical data for PaccMann<sup>RL</sup>. For example, a SMILES/SELFIES VAE using stack-augmented GRUs in both encoder and decoder. For details, see for example:
+
+- [PaccMann<sup>RL</sup>: De novo generation of hit-like anticancer molecules from transcriptomic data via reinforcement learning](https://www.cell.com/iscience/fulltext/S2589-0042(21)00237-6) (_iScience_, 2021). 
 
 ## Requirements
 
@@ -64,12 +66,16 @@ optional arguments:
 If you use `paccmann_chemistry` in your projects, please cite the following:
 
 ```bib
-@misc{born2019paccmannrl,
-    title={PaccMann^RL: Designing anticancer drugs from transcriptomic data via reinforcement learning},
-    author={Jannis Born and Matteo Manica and Ali Oskooei and Joris Cadow and Maria Rodriguez Martinez},
-    year={2019},
-    eprint={1909.05114},
-    archivePrefix={arXiv},
-    primaryClass={q-bio.BM}
+@article{born2021paccmannrl,
+    title = {PaccMann^{RL}: De novo generation of hit-like anticancer molecules from transcriptomic data via reinforcement learning},
+    journal = {iScience},
+    volume = {24},
+    number = {4},
+    pages = {102269},
+    year = {2021},
+    issn = {2589-0042},
+    doi = {https://doi.org/10.1016/j.isci.2021.102269},
+    url = {https://www.cell.com/iscience/fulltext/S2589-0042(21)00237-6},
+    author = {Jannis Born and Matteo Manica and Ali Oskooei and Joris Cadow and Greta Markert and María {Rodríguez Martínez}}
 }
 ```
