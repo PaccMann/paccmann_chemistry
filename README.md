@@ -1,4 +1,5 @@
-[![Build Status](https://travis-ci.org/PaccMann/paccmann_chemistry.svg?branch=master)](https://travis-ci.org/PaccMann/paccmann_chemistry)
+[![Build Status](https://github.com/PaccMann/paccmann_chemistry/actions/workflows/build.yml/badge.svg)](https://github.com/PaccMann/paccmann_chemistry/actions/workflows/build.yml)
+
 # paccmann_chemistry
 
 Generative models of chemical data for PaccMann<sup>RL</sup>. For example, a SMILES/SELFIES VAE using stack-augmented GRUs in both encoder and decoder. For details, see for example:
