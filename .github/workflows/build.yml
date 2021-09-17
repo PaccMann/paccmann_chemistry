@@ -48,7 +48,7 @@ jobs:
       - name: Conda environment setup
         uses: conda-incubator/setup-miniconda@v2
         with:
-          activate-environment: paccmann_chemistry
+          activate-environment: paccmann_chemistry/examples
           environment-file: conda.yml
           auto-activate-base: false
           use-only-tar-bz2: true  # This needs to be set for proper caching
