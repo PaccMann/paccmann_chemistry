@@ -66,7 +66,7 @@ def sequential_data_preparation(
         # build dropout indices consisting of dropout_index
         dropout_indices = torch.LongTensor(
             dropout_index * torch.ones(1, batch_size).numpy()
-        )
+        ).to(device)
         # mask for token dropout
         mask = Bernoulli(input_keep).sample((input_batch.shape[0], ))
         mask = torch.LongTensor(mask.numpy())
@@ -74,7 +74,7 @@ def sequential_data_preparation(
 
         decoder_batch[dropout_loc] = dropout_indices
 
-    end_padding = torch.LongTensor(torch.zeros(1, batch_size).numpy())
+    end_padding = torch.LongTensor(torch.zeros(1, batch_size).numpy()).to(device)
     target_seq = torch.cat((input_batch[1:, :], end_padding), dim=0)
     target_seq = copy.deepcopy(target_seq).to(device)
 
