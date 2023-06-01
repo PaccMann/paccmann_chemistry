@@ -1,10 +1,19 @@
 [![Build Status](https://github.com/PaccMann/paccmann_chemistry/actions/workflows/build.yml/badge.svg)](https://github.com/PaccMann/paccmann_chemistry/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Gradio demo](https://img.shields.io/website-up-down-green-red/https/hf.space/gradioiframe/GT4SD/paccmann_rl/+.svg?label=demo%20status)](https://huggingface.co/spaces/GT4SD/paccmann_rl)
+
 
 # paccmann_chemistry
 
 Generative models of chemical data for PaccMann<sup>RL</sup>. For example, a SMILES/SELFIES VAE using stack-augmented GRUs in both encoder and decoder. For details, see for example:
 
-- [PaccMann<sup>RL</sup>: De novo generation of hit-like anticancer molecules from transcriptomic data via reinforcement learning](https://www.cell.com/iscience/fulltext/S2589-0042(21)00237-6) (_iScience_, 2021). 
+- [![DOI:10.1016/j.isci.2021.102269](http://img.shields.io/badge/DOI-10.1016/j.isci.2021.102269-094573.svg)](https://doi.org/10.1016/j.isci.2021.102269) [PaccMann<sup>RL</sup>: De novo generation of hit-like anticancer molecules from transcriptomic data via reinforcement learning](https://www.cell.com/iscience/fulltext/S2589-0042(21)00237-6) (_iScience_, 2021). 
+
+- [![DOI:10.1088/2632-2153/abe808](http://img.shields.io/badge/DOI-10.1088/2632/2153/abe808-C1D4F4.svg)](https://doi.org/10.1088/2632-2153/abe808) [Data-driven molecular design for discovery and synthesis of novel ligands: a case study on SARS-CoV-2](https://iopscience.iop.org/article/10.1088/2632-2153/abe808) (_Machine Learning: Science and Technology_, 2021).
+
+
+
+
 
 ## Requirements
 
@@ -67,6 +76,19 @@ optional arguments:
 If you use `paccmann_chemistry` in your projects, please cite the following:
 
 ```bib
+@article{born2021datadriven,
+  author = {Born, Jannis and Manica, Matteo and Cadow, Joris and Markert, Greta and Mill, Nil Adell and Filipavicius, Modestas and Janakarajan, Nikita and Cardinale, Antonio and Laino, Teodoro and {Rodr{\'{i}}guez Mart{\'{i}}nez}, Mar{\'{i}}a},
+  doi = {10.1088/2632-2153/abe808},
+  issn = {2632-2153},
+  journal = {Machine Learning: Science and Technology},
+  number = {2},
+  pages = {025024},
+  title = {{Data-driven molecular design for discovery and synthesis of novel ligands: a case study on SARS-CoV-2}},
+  url = {https://iopscience.iop.org/article/10.1088/2632-2153/abe808},
+  volume = {2},
+  year = {2021}
+}
+
 @article{born2021paccmannrl,
   title = {PaccMann\textsuperscript{RL}: De novo generation of hit-like anticancer molecules from transcriptomic data via reinforcement learning},
   journal = {iScience},
