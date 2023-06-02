@@ -10,11 +10,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-18.04
+          - os: ubuntu-20.04
             pip_cache_path: ~/.cache/pip
-            experimental: false
-          - os: macos-latest
-            pip_cache_path: ~/Library/Caches/pip
             experimental: false
     defaults:
       run:
